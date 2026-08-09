@@ -124,6 +124,12 @@ statuses are additive.
 
 ## Webhooks
 
+Envelope: `{ id, type, api_version, created, data }` — `data` is byte-identical
+to the result payload. `type` is one of `session.success`, `session.failed`,
+`session.canceled`. (`session.expired` exists but is **not currently emitted**;
+detect expiry yourself.) Subscriptions are per type — subscribing to one does
+not enrol you in the others.
+
 Header `X-Xident-Signature: t=<unix>,v1=<hex>`.
 
 Signed payload is `<timestamp>.<raw-body>`, HMAC-SHA256, hex.

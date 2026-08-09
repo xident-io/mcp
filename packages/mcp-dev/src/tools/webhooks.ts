@@ -59,8 +59,8 @@ export const simulateWebhookTool: ToolDef = {
   inputSchema: {
     url: z.string().url().describe("Target URL — must be localhost or 127.0.0.1"),
     secret: z.string().describe("The webhook signing secret your handler expects"),
-    event: z.enum(["verification.completed", "verification.failed", "verification.expired"])
-      .describe("Which lifecycle event to simulate"),
+    event: z.enum(["session.success", "session.failed", "session.canceled"])
+      .describe("Which lifecycle event to simulate. session.expired exists in the catalog but is never emitted in production, so it is not offered here."),
   },
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   requiresKey: true,
@@ -86,15 +86,21 @@ export const simulateWebhookTool: ToolDef = {
     }
 
     const secret = String(args["secret"] ?? "");
-    const event = String(args["event"] ?? "verification.completed");
-    const verified = event === "verification.completed";
-    const timestamp = String(Math.floor(Date.now() / 1000));
+    const event = String(args["event"] ?? "session.success");
+    const verified = event === "session.success";
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const timestamp = String(nowSeconds);
+    const status = verified ? "success" : event === "session.canceled" ? "canceled" : "failed";
+    // Envelope mirrors models/webhook_events.go: id/type/api_version/created/data,
+    // with `created` in Unix SECONDS. `data` is the frozen v1 tenant result.
     const body = JSON.stringify({
-      event,
-      timestamp: new Date().toISOString(),
+      id: `evt_simulated${nowSeconds.toString(16)}`,
+      type: event,
+      api_version: "2026-08",
+      created: nowSeconds,
       data: {
         token: "xtk_simulated0001",
-        status: verified ? "success" : "failed",
+        status,
         verified,
         verification_mode: "full",
         ...(verified ? {} : { reason: "liveness_failed" }),

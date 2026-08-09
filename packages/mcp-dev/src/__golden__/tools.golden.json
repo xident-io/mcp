@@ -235,11 +235,11 @@
         "event": {
           "type": "string",
           "enum": [
-            "verification.completed",
-            "verification.failed",
-            "verification.expired"
+            "session.success",
+            "session.failed",
+            "session.canceled"
           ],
-          "description": "Which lifecycle event to simulate"
+          "description": "Which lifecycle event to simulate. session.expired exists in the catalog but is never emitted in production, so it is not offered here."
         }
       },
       "required": [

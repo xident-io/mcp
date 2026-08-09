@@ -48,7 +48,7 @@ describe("xident_get_endpoint", () => {
 });
 
 describe("xident_verify_webhook_signature", () => {
-  const body = JSON.stringify({ event: "verification.completed" });
+  const body = JSON.stringify({ event: "session.success" });
   const ts = String(Math.floor(Date.now() / 1000));
 
   it("confirms a good signature and names the signed-payload format", async () => {
@@ -166,7 +166,7 @@ describe("xident_simulate_webhook", () => {
   it("refuses a non-local target, so it cannot be used as a request-forgery primitive", async () => {
     const fetchImpl = vi.fn(async () => json(200, {}));
     const out = await simulateWebhookTool.handler(
-      { url: "https://evil.example.com/x", secret: "s", event: "verification.completed" },
+      { url: "https://evil.example.com/x", secret: "s", event: "session.success" },
       sandboxCtx(fetchImpl as never)) as Json;
     expect(out["code"]).toBe("NON_LOCAL_TARGET");
     expect(fetchImpl).not.toHaveBeenCalled();
@@ -179,7 +179,7 @@ describe("xident_simulate_webhook", () => {
       return json(200, {});
     });
     const out = await simulateWebhookTool.handler(
-      { url: "http://localhost:3000/hook", secret: "whsec", event: "verification.completed" },
+      { url: "http://localhost:3000/hook", secret: "whsec", event: "session.success" },
       sandboxCtx(fetchImpl as never)) as Json;
     expect(out["sent"]).toBe(true);
     const { verifyWebhookSignature } = await import("@xident/mcp-shared");
@@ -189,7 +189,7 @@ describe("xident_simulate_webhook", () => {
   it("points at the verifier when the handler rejects the delivery", async () => {
     const fetchImpl = vi.fn(async () => json(401, {}));
     const out = await simulateWebhookTool.handler(
-      { url: "http://localhost:3000/hook", secret: "whsec", event: "verification.failed" },
+      { url: "http://localhost:3000/hook", secret: "whsec", event: "session.failed" },
       sandboxCtx(fetchImpl as never)) as Json;
     expect(out["handler_accepted"]).toBe(false);
     expect(String(out["note"])).toContain("xident_verify_webhook_signature");
@@ -198,7 +198,7 @@ describe("xident_simulate_webhook", () => {
   it("reports a refused connection instead of throwing", async () => {
     const fetchImpl = vi.fn(async () => { throw new Error("ECONNREFUSED"); });
     const out = await simulateWebhookTool.handler(
-      { url: "http://localhost:9/hook", secret: "s", event: "verification.completed" },
+      { url: "http://localhost:9/hook", secret: "s", event: "session.success" },
       sandboxCtx(fetchImpl as never)) as Json;
     expect(out["code"]).toBe("DELIVERY_FAILED");
   });

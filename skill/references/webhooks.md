@@ -3,11 +3,33 @@
 ## Envelope
 
 ```json
-{ "event": "verification.completed", "timestamp": "2026-08-09T10:00:00Z", "data": { /* identical to the result payload */ } }
+{
+  "id": "evt_a1b2c3d4e5f6a7b8c9d0e1f2",
+  "type": "session.success",
+  "api_version": "2026-08",
+  "created": 1785751350,
+  "data": { /* identical to the result payload */ }
+}
 ```
 
 `data` is byte-identical to what `GET /verify/v1/result/{token}` returns, so one
-parser handles both.
+parser handles both. `created` is Unix **seconds**, not an ISO string.
+
+## Event types
+
+| Type | When |
+|---|---|
+| `session.success` | Verification passed |
+| `session.failed` | Verification explicitly failed |
+| `session.canceled` | Client requested cancellation (one `l`) |
+| `session.expired` | **Reserved — not currently emitted.** Do not wait for it; detect expiry by polling or by your own timeout. |
+
+`session.completed` is a deprecated alias for `session.success`, still delivered
+to endpoints that subscribed under the pre-2026-07 name. Do not use it for new
+subscriptions.
+
+Subscriptions are explicit per type: subscribing to `session.success` does not
+enrol you in `session.failed`.
 
 ## Signature
 

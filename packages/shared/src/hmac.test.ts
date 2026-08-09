@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { computeSignature, verifyWebhookSignature } from "./hmac.js";
 
 const SECRET = "whsec_test_secret";
-const BODY = JSON.stringify({ event: "verification.completed", data: { verified: true } });
+const BODY = JSON.stringify({ type: "session.success", data: { verified: true } });
 const NOW = 1_754_000_000;
 
 function header(ts: number, body = BODY, secret = SECRET): string {
@@ -17,7 +17,7 @@ describe("verifyWebhookSignature", () => {
 
   it("rejects a tampered body", () => {
     const h = header(NOW);
-    const tampered = JSON.stringify({ event: "verification.completed", data: { verified: false } });
+    const tampered = JSON.stringify({ type: "session.success", data: { verified: false } });
     expect(verifyWebhookSignature(tampered, h, SECRET, { nowSeconds: NOW }))
       .toEqual({ valid: false, reason: "signature_mismatch" });
   });
@@ -58,7 +58,7 @@ describe("verifyWebhookSignature", () => {
   it("is sensitive to re-serialization, the most common integration mistake", () => {
     const h = header(NOW);
     // Same data, different key order — different bytes, so a different signature.
-    const reserialized = JSON.stringify({ data: { verified: true }, event: "verification.completed" });
+    const reserialized = JSON.stringify({ data: { verified: true }, type: "session.success" });
     expect(verifyWebhookSignature(reserialized, h, SECRET, { nowSeconds: NOW }).valid).toBe(false);
   });
 });
