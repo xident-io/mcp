@@ -1,0 +1,40 @@
+{
+  "name": "@xident/mcp-dev",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Xident build-time MCP server \u2014 docs lookup, sandbox test verifications, webhook debugging.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xident-io/mcp.git",
+    "directory": "packages/mcp-dev"
+  },
+  "homepage": "https://docs.xident.io/agents",
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "xident",
+    "age-verification",
+    "identity-verification",
+    "kyc"
+  ],
+  "bin": {
+    "xident-mcp-dev": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@xident/mcp-shared": "workspace:*",
+    "zod": "^4.1.13"
+  }
+}

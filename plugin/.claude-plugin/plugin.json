@@ -1,0 +1,18 @@
+{
+  "name": "xident",
+  "description": "Integrate Xident age and identity verification \u2014 an agent skill plus a sandbox MCP server for docs lookup, test verifications, and webhook debugging.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Xident",
+    "url": "https://xident.io"
+  },
+  "homepage": "https://docs.xident.io/agents",
+  "repository": "https://github.com/xident-io/mcp",
+  "license": "MIT",
+  "keywords": [
+    "age-verification",
+    "identity-verification",
+    "kyc",
+    "xident"
+  ]
+}

@@ -1,0 +1,275 @@
+[
+  {
+    "name": "xident_search_docs",
+    "title": "Search Xident API",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Keywords, e.g. 'init token' or 'webhook' or 'result'"
+        },
+        "limit": {
+          "description": "Max results (default 10)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "xident_get_endpoint",
+    "title": "Get Xident endpoint schema",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact path, e.g. /verify/v1/init"
+        },
+        "method": {
+          "type": "string",
+          "minLength": 3,
+          "description": "HTTP method, e.g. POST"
+        }
+      },
+      "required": [
+        "path",
+        "method"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "xident_verify_webhook_signature",
+    "title": "Verify a Xident webhook signature",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "raw_body": {
+          "type": "string",
+          "description": "The raw request body, byte-for-byte as received"
+        },
+        "signature_header": {
+          "type": "string",
+          "description": "The X-Xident-Signature header value, e.g. t=1754000000,v1=abc..."
+        },
+        "secret": {
+          "type": "string",
+          "description": "The webhook signing secret"
+        },
+        "tolerance_seconds": {
+          "description": "Replay window (default 300)",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "raw_body",
+        "signature_header",
+        "secret"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "xident_whoami",
+    "title": "Check the configured Xident credential",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "xident_start_test_verification",
+    "title": "Start a sandbox verification",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "min_age": {
+          "description": "Age gate to test, e.g. 18",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 120
+        },
+        "purpose": {
+          "description": "Default age_verification",
+          "type": "string",
+          "enum": [
+            "age_verification",
+            "id_verification"
+          ]
+        },
+        "verification_mode": {
+          "description": "auto (default), document (forces ID + face match), facial (on-device only)",
+          "type": "string",
+          "enum": [
+            "auto",
+            "document",
+            "facial"
+          ]
+        },
+        "callback_url": {
+          "description": "Where the widget returns the user",
+          "type": "string",
+          "format": "uri"
+        },
+        "locale": {
+          "description": "BCP-47 locale, e.g. de-DE",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "xident_get_result",
+    "title": "Read a verification result",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The verification token, e.g. xtk_..."
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "xident_explain_session",
+    "title": "Explain why a verification did not pass",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "token": {
+          "description": "A verification token to look up",
+          "type": "string"
+        },
+        "reason": {
+          "description": "A reason code, if you already have one",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "xident_simulate_webhook",
+    "title": "Send a signed test webhook",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Target URL — must be localhost or 127.0.0.1"
+        },
+        "secret": {
+          "type": "string",
+          "description": "The webhook signing secret your handler expects"
+        },
+        "event": {
+          "type": "string",
+          "enum": [
+            "verification.completed",
+            "verification.failed",
+            "verification.expired"
+          ],
+          "description": "Which lifecycle event to simulate"
+        }
+      },
+      "required": [
+        "url",
+        "secret",
+        "event"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "xident_check_integration",
+    "title": "Lint a Xident integration",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  }
+]

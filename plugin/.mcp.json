@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "xident-dev": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@xident/mcp-dev"
+      ],
+      "env": {
+        "XIDENT_API_KEY": "${XIDENT_API_KEY}"
+      }
+    }
+  }
+}
