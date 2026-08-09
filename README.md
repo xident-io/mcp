@@ -6,7 +6,7 @@ AI agent.
 | Package | What it is |
 |---|---|
 | [`@xident/mcp-dev`](packages/mcp-dev) | **Build-time** MCP server. Docs lookup, sandbox test verifications, webhook debugging. Runs on a developer machine. |
-| [`@xident/mcp`](packages/mcp) | **Runtime** MCP server for production agents. OAuth-scoped. |
+| [`@xident/mcp`](packages/mcp) | **Runtime** MCP server for production agents — an OAuth 2.1 resource server. Holds no tenant credential; forwards the caller's token. |
 | [`skill/`](skill) | Agent skill — teaches any agent to integrate Xident correctly. No runtime, no credentials. |
 | [`plugin/`](plugin) | Claude Code plugin bundling the skill and the dev server. |
 
@@ -62,6 +62,20 @@ not a convention.
 
 `xident_simulate_webhook` refuses any target that is not localhost, so it cannot
 be used to make requests on someone else's behalf.
+
+## Running agents in production
+
+`@xident/mcp` is a remote MCP server. A tenant authorises a client through
+Xident's consent screen, and the client calls the server with the resulting
+bearer token. Tools outside the token's scopes are not advertised.
+
+```bash
+docker run -p 8080:8080 \
+  -e XIDENT_MCP_RESOURCE_URL=https://mcp.yourdomain.com \
+  ghcr.io/xident-io/mcp
+```
+
+See [packages/mcp](packages/mcp) for the full contract.
 
 ## Stability
 

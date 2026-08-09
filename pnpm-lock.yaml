@@ -18,6 +18,18 @@ importers:
         specifier: ^4.0.18
         version: 4.1.10(@types/node@22.20.1)(vite@8.2.1(@types/node@22.20.1))
 
+  packages/mcp:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.30.0
+        version: 1.30.0(zod@4.4.3)
+      '@xident/mcp-shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^4.1.13
+        version: 4.4.3
+
   packages/mcp-dev:
     dependencies:
       '@modelcontextprotocol/sdk':
