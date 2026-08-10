@@ -22,7 +22,37 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
+
+      # This is the only moment where the tag and the source tree are both
+      # known, which is why the manifest/tag comparison has to happen here.
+      #
+      # It runs BEFORE publish because an npm version is immutable: publishing
+      # 0.1.0 under a v0.2.0 tag is recovered by a version bump, not a fix.
+      #
+      # github.ref_name is handed to us by GitHub, so it needs no git history —
+      # the default shallow, tagless checkout above is enough.
+      #
+      # The comparison itself lives in packages/shared/src/release-guard.test.ts
+      # so the rule is TypeScript under review, not shell. It checks all THREE
+      # manifests: `pnpm publish -r` ships three packages, and a tag matching
+      # one but not the others is a real, silent failure mode.
+      - name: package versions must match the tag
+        env:
+          XIDENT_RELEASE_VERSION: ${{ github.ref_name }}
+        run: pnpm --filter @xident/mcp-shared test src/release-guard.test.ts
+
       - run: pnpm -r test
+
+      # NPM_TOKEN must grant write on the @xident SCOPE, not on a list of
+      # packages. A granular token limited to "only select packages" can never
+      # create a NEW one, and npm reports that as `404 Not Found - PUT`, not
+      # 403 — it refuses to confirm whether the package exists. That 404 cost
+      # two failed runs on 2026-08-10. A classic Automation token also works
+      # and bypasses the account's auth-and-writes 2FA.
+      #
+      # pnpm, never npm: the servers depend on "@xident/mcp-shared":
+      # "workspace:*", and only pnpm rewrites that to a real version on pack.
+      # npm would publish the literal string and every install would fail.
       - run: pnpm publish -r --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
