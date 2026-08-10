@@ -7,7 +7,7 @@ AI agent.
 |---|---|
 | [`@xident/mcp-dev`](packages/mcp-dev) | **Build-time** MCP server. Docs lookup, sandbox test verifications, webhook debugging. Runs on a developer machine. |
 | [`@xident/mcp`](packages/mcp) | **Runtime** MCP server for production agents. OAuth-scoped. |
-| [`skill/`](skill) | Agent skill — teaches any agent to integrate Xident correctly. No runtime, no credentials. |
+| [`plugin/skills/xident-verification/`](plugin/skills/xident-verification) | Agent skill — teaches any agent to integrate Xident correctly. No runtime, no credentials. |
 | [`plugin/`](plugin) | Claude Code plugin bundling the skill and the dev server. |
 
 ## Quick start
@@ -15,6 +15,7 @@ AI agent.
 ### Claude Code
 
 ```
+/plugin marketplace add xident-io/mcp
 /plugin install xident@xident-io
 ```
 

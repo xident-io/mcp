@@ -1,0 +1,28 @@
+{
+  "name": "xident-io",
+  "description": "Official Xident plugins for Claude Code.",
+  "owner": {
+    "name": "Xident",
+    "url": "https://xident.io"
+  },
+  "plugins": [
+    {
+      "name": "xident",
+      "source": "./plugin",
+      "description": "Integrate Xident age and identity verification — an agent skill plus a sandbox MCP server for docs lookup, test verifications, and webhook debugging.",
+      "version": "0.1.0",
+      "category": "security",
+      "author": {
+        "name": "Xident",
+        "url": "https://xident.io"
+      },
+      "homepage": "https://docs.xident.io/agents",
+      "keywords": [
+        "age-verification",
+        "identity-verification",
+        "kyc",
+        "xident"
+      ]
+    }
+  ]
+}
