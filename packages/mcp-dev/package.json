@@ -36,5 +36,8 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@xident/mcp-shared": "workspace:*",
     "zod": "^4.1.13"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

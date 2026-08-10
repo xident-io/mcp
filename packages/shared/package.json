@@ -26,5 +26,8 @@
   "files": [
     "dist",
     "spec"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
