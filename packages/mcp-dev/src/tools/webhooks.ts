@@ -102,7 +102,7 @@ export const simulateWebhookTool: ToolDef = {
         token: "xtk_simulated0001",
         status,
         verified,
-        verification_mode: "full",
+        verification_type: "full",
         ...(verified ? {} : { reason: "liveness_failed" }),
       },
     });
