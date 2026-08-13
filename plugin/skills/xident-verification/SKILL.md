@@ -86,7 +86,7 @@ Authorization: Bearer sk_live_...
   "token": "xtk_...",
   "status": "success",
   "verified": true,
-  "verification_mode": "full",
+  "verification_type": "full",
   "checks": {
     "liveness":   { "performed": true, "passed": true },
     "age":        { "performed": true, "passed": true, "gate": 18 },
