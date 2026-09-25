@@ -4867,6 +4867,7 @@
           "type": "number"
         },
         "t": {
+          "description": "required on every sample: a non-negative integer, never decreasing",
           "type": "integer"
         },
         "yaw": {
@@ -4939,11 +4940,12 @@
       "type": "object",
       "required": [
         "challenge_id",
+        "pose_trajectory",
         "token"
       ],
       "properties": {
         "action_results": {
-          "description": "Per-action timing + scores (optional during rollout)",
+          "description": "Legacy; accepted but ignored since 2026-09-25 (not movement evidence)",
           "type": "array",
           "items": {
             "$ref": "#/definitions/internal_api_handlers_verify.ActionResultRequest"
@@ -4971,7 +4973,7 @@
           ]
         },
         "pose_trajectory": {
-          "description": "Server-authoritative ordered-liveness evidence (numbers only)",
+          "description": "Required; the only movement evidence: every sample with a non-negative integer t, never decreasing, at least 20 distinct times spanning at least 1500 ms",
           "type": "array",
           "items": {
             "$ref": "#/definitions/internal_api_handlers_verify.PoseSampleRequest"
