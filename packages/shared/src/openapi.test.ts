@@ -51,6 +51,61 @@ describe("resolveRefs", () => {
     const resolved = resolveRefs({ $ref: "#/definitions/Node" }, spec) as Record<string, unknown>;
     expect(JSON.stringify(resolved)).toContain("$circular");
   });
+
+  it("follows a pointer into the shared parameters section", () => {
+    const header = { name: "X-API-Version", in: "header", type: "string", required: false };
+    const spec = { swagger: "2.0", info: {}, paths: {}, parameters: { XApiVersion: header } } as never;
+    expect(resolveRefs({ $ref: "#/parameters/XApiVersion" }, spec)).toEqual(header);
+  });
+
+  it("follows a pointer into any other top-level section, such as responses", () => {
+    const notFound = { description: "Not found" };
+    const spec = { swagger: "2.0", info: {}, paths: {}, responses: { NotFound: notFound } } as never;
+    expect(resolveRefs({ $ref: "#/responses/NotFound" }, spec)).toEqual(notFound);
+  });
+
+  it("does not take the same name in two sections for a loop", () => {
+    const spec = {
+      swagger: "2.0", info: {}, paths: {},
+      parameters: { Body: { name: "body", in: "body", schema: { $ref: "#/definitions/Body" } } },
+      definitions: { Body: { type: "object" } },
+    } as never;
+    expect(resolveRefs({ $ref: "#/parameters/Body" }, spec)).toEqual({
+      name: "body", in: "body", schema: { type: "object" },
+    });
+  });
+
+  it("does not find inherited object properties", () => {
+    expect(resolveRefs({ $ref: "#/definitions/constructor" }, loadSpec())).toEqual({
+      $unresolved: "#/definitions/constructor",
+    });
+  });
+
+  it("marks a pointer to a whole section or to a file as unresolved", () => {
+    const spec = { swagger: "2.0", info: {}, paths: {}, definitions: { Foo: { type: "object" } } } as never;
+    expect(resolveRefs({ $ref: "#/definitions" }, spec)).toEqual({ $unresolved: "#/definitions" });
+    // A relative file path, not a pointer into this spec, even though its tail looks like one.
+    expect(resolveRefs({ $ref: "./definitions/Foo" }, spec)).toEqual({ $unresolved: "./definitions/Foo" });
+  });
+});
+
+describe("the bundled spec", () => {
+  it("has no pointer that an endpoint lookup leaves unresolved", () => {
+    const endpoints = allEndpoints();
+    expect(endpoints.length).toBeGreaterThan(50);
+    const broken = endpoints
+      .filter((ep) => JSON.stringify(ep).includes('"$unresolved"'))
+      .map((ep) => `${ep.method} ${ep.path}`);
+    expect(broken).toEqual([]);
+  });
+
+  it("shows the X-API-Version header on a /verify/ endpoint", () => {
+    const ep = findEndpoint("/verify/v1/liveness/verify", "post");
+    expect(ep).not.toBeNull();
+    expect(ep!.parameters).toContainEqual(
+      expect.objectContaining({ name: "X-API-Version", in: "header", type: "string" }),
+    );
+  });
 });
 
 describe("searchEndpoints", () => {

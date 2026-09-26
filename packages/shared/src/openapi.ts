@@ -15,6 +15,14 @@ export interface SwaggerSpec {
   basePath?: string;
   paths: Record<string, Record<string, RawOperation>>;
   definitions?: Record<string, unknown>;
+  /**
+   * Shared parameters. scripts/openapi-public.py puts the X-API-Version header
+   * here and points every /verify/ operation at it with
+   * `{"$ref": "#/parameters/XApiVersion"}`.
+   */
+  parameters?: Record<string, unknown>;
+  /** Shared responses. Swagger 2.0 allows them; the current spec has none. */
+  responses?: Record<string, unknown>;
 }
 
 interface RawOperation {
@@ -60,10 +68,40 @@ export function __resetSpecCache(): void {
 const MAX_REF_DEPTH = 6;
 
 /**
- * Replace `$ref` pointers with the definitions they name, so a caller gets a
- * usable schema instead of a pointer it would have to chase. Depth-limited and
- * cycle-aware: Xident's models are self-referential in places, and an
- * unbounded resolver would hang the server rather than fail a request.
+ * Follow a local pointer such as `#/definitions/Foo` or
+ * `#/parameters/XApiVersion` from the top of the spec, one path segment at a
+ * time, so every top-level section works, not only `definitions`. Segments are
+ * unescaped as JSON Pointer says (`~1` is `/`, `~0` is `~`).
+ *
+ * Returns undefined when the pointer is not local (`other.json#/...`), names a
+ * whole section instead of one entry (`#/definitions`), or names something the
+ * spec does not have. Only the object's own keys are followed, so
+ * `#/definitions/constructor` is not found on Object.prototype.
+ */
+function lookupPointer(ref: string, spec: SwaggerSpec): unknown {
+  if (!ref.startsWith("#/")) return undefined;
+  const segments = ref
+    .slice(2)
+    .split("/")
+    .map((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
+  if (segments.length < 2) return undefined;
+
+  let node: unknown = spec;
+  for (const segment of segments) {
+    if (node === null || typeof node !== "object" || !Object.hasOwn(node, segment)) return undefined;
+    node = (node as Record<string, unknown>)[segment];
+  }
+  return node;
+}
+
+/**
+ * Replace `$ref` pointers with what they point to (a model under
+ * `definitions`, a shared header under `parameters`, and so on), so a caller
+ * gets a usable schema instead of a pointer it would have to chase.
+ * Depth-limited and cycle-aware: Xident's models are self-referential in
+ * places, and an unbounded resolver would hang the server rather than fail a
+ * request. A cycle is tracked by the full pointer, so `#/parameters/Foo` and
+ * `#/definitions/Foo` are two different things, not a loop.
  */
 export function resolveRefs(
   node: unknown,
@@ -80,11 +118,10 @@ export function resolveRefs(
   const obj = node as Record<string, unknown>;
   const ref = obj["$ref"];
   if (typeof ref === "string") {
-    const name = ref.replace("#/definitions/", "");
-    if (seen.has(name)) return { $circular: name };
-    const target = spec.definitions?.[name];
+    if (seen.has(ref)) return { $circular: ref };
+    const target = lookupPointer(ref, spec);
     if (target === undefined) return { $unresolved: ref };
-    return resolveRefs(target, spec, depth + 1, new Set([...seen, name]));
+    return resolveRefs(target, spec, depth + 1, new Set([...seen, ref]));
   }
 
   const out: Record<string, unknown> = {};
