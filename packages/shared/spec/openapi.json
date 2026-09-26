@@ -794,6 +794,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.face2FASubmitRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -846,6 +849,9 @@
             "name": "id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -898,6 +904,9 @@
             "name": "user_id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -942,6 +951,9 @@
             "name": "user_id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -993,6 +1005,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.face2FASubmitRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -1069,7 +1084,12 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ]
       }
     },
     "/verify/v1/accounts/login": {
@@ -1099,6 +1119,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.accountLoginRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -1184,7 +1207,12 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ]
       },
       "delete": {
         "security": [
@@ -1228,7 +1256,12 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ]
       }
     },
     "/verify/v1/accounts/passkey/authenticate/begin": {
@@ -1262,7 +1295,12 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ]
       }
     },
     "/verify/v1/accounts/passkey/authenticate/finish": {
@@ -1272,7 +1310,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Completes the discoverable credential ceremony by validating the authenticator response. Returns JWT access/refresh tokens on success. Session ID must be passed via X-Session-ID header or session_id query parameter.",
+        "description": "Completes the discoverable credential ceremony by validating the authenticator response. Returns JWT access/refresh tokens on success. The request body is the raw WebAuthn assertion and carries nothing else, so the session ID from authenticate/begin travels in the X-Session-ID header.",
         "consumes": [
           "application/json"
         ],
@@ -1286,15 +1324,13 @@
         "parameters": [
           {
             "type": "string",
-            "description": "Session ID from authenticate/begin (alternative to query param)",
+            "description": "Session ID from authenticate/begin",
             "name": "X-Session-ID",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
-            "type": "string",
-            "description": "Session ID from authenticate/begin (alternative to header)",
-            "name": "session_id",
-            "in": "query"
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -1383,7 +1419,12 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ]
       }
     },
     "/verify/v1/accounts/passkey/register/finish": {
@@ -1396,7 +1437,7 @@
             "BearerAuth": []
           }
         ],
-        "description": "Completes the WebAuthn credential creation ceremony by validating the authenticator response and storing the new passkey. Session ID via X-Session-ID header or session_id query param. Optional X-Passkey-Name header to name the passkey. Requires account JWT via X-Account-Token header.",
+        "description": "Completes the WebAuthn credential creation ceremony by validating the authenticator response and storing the new passkey. The request body is the raw WebAuthn attestation and carries nothing else, so the session ID from register/begin travels in the X-Session-ID header. Optional X-Passkey-Name header to name the passkey. Requires account JWT via X-Account-Token header.",
         "consumes": [
           "application/json"
         ],
@@ -1410,21 +1451,19 @@
         "parameters": [
           {
             "type": "string",
-            "description": "Session ID from register/begin (alternative to query param)",
+            "description": "Session ID from register/begin",
             "name": "X-Session-ID",
-            "in": "header"
-          },
-          {
-            "type": "string",
-            "description": "Session ID from register/begin (alternative to header)",
-            "name": "session_id",
-            "in": "query"
+            "in": "header",
+            "required": true
           },
           {
             "type": "string",
             "description": "Friendly name for the passkey (default: My Passkey)",
             "name": "X-Passkey-Name",
             "in": "header"
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -1519,7 +1558,12 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ]
       }
     },
     "/verify/v1/accounts/passkeys/{id}": {
@@ -1547,6 +1591,9 @@
             "name": "id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -1609,6 +1656,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.quickRegisterRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -1648,6 +1698,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.accountRegisterRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -1671,6 +1724,67 @@
           },
           "400": {
             "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          }
+        }
+      }
+    },
+    "/verify/v1/accounts/reuse": {
+      "post": {
+        "description": "Completes the session if the signed-in account already holds an unexpired age bracket satisfying the site's minimum age. Returns 409 when it does not, and the caller must run a normal verification.",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Reuse a verified Xident ID for a session",
+        "parameters": [
+          {
+            "description": "Session to complete",
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/internal_api_handlers_verify.accountReuseRequest"
+            }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/internal_api_handlers_verify.accountReuseResponse"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          },
+          "404": {
+            "description": "Not Found",
             "schema": {
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
@@ -1719,6 +1833,9 @@
             "description": "Items per page",
             "name": "per_page",
             "in": "query"
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -1770,6 +1887,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.blacklistAddImageRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -1827,6 +1947,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.blacklistAddSessionRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -1891,6 +2014,9 @@
             "name": "id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -1961,7 +2087,12 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ]
       }
     },
     "/verify/v1/countries": {
@@ -1979,11 +2110,51 @@
             "description": "europe | templates | all (default: europe)",
             "name": "scope",
             "in": "query"
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
           "200": {
             "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          }
+        }
+      }
+    },
+    "/verify/v1/countries/{code}/document-types": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "SDK"
+        ],
+        "summary": "Enabled document types for a country",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ISO 3166-1 alpha-2 code, e.g. DE",
+            "name": "code",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/internal_api_handlers_verify.countryDocumentTypesResponseDTO"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
             "schema": {
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
@@ -2022,6 +2193,9 @@
             "name": "api_key",
             "in": "query",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2074,6 +2248,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.EnrollRequestDTO"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2130,6 +2307,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.widgetFeedbackRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2165,6 +2345,9 @@
             "name": "token",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2240,6 +2423,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.createInitRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2287,6 +2473,9 @@
             "name": "token",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2357,7 +2546,12 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ]
       }
     },
     "/verify/v1/liveness/verify": {
@@ -2367,7 +2561,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Submits liveness detection frames for a previously created challenge.",
+        "description": "Submits the movement evidence for a previously issued challenge: the head pose trajectory (numbers only, no images). The server checks that the head turned in the issued order and completes the challenge. The result counts for a session only after PATCH /verify/v1/sessions/{id}/liveness attaches the challenge to it.",
         "consumes": [
           "application/json"
         ],
@@ -2387,6 +2581,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.VerifyRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2444,6 +2641,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.PresignRequestDTO"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2496,6 +2696,9 @@
             "name": "task_id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2553,6 +2756,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.VerifyURLsRequestDTO"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2616,6 +2822,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.uploadRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2704,7 +2913,12 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ]
       }
     },
     "/verify/v1/requirements/check": {
@@ -2731,6 +2945,9 @@
             "name": "user_id",
             "in": "query",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2768,7 +2985,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Returns the verification verdict for a session, as the site owner's secret key sees it. `status` is a VERDICT, not a lifecycle marker: `success` means the user PASSED. A session that ran to the end of the flow but missed the age threshold is `failed`, with `reason` explaining why. Possible `status` values: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken`. Account claiming (Xident ID) does not change the tenant-visible status \u2014 a passed verification stays `success` even after a portal account links to it; the internal `claimed` lifecycle state is never returned here. `external_user_id` echoes the `user_id` supplied at init so the session can be correlated to your own user server-side \u2014 do not correlate on the browser callback, which is unsigned. Requires a secret API key (sk_live_/sk_test_) \u2014 a public key gets 403 SECRET_KEY_REQUIRED. This is the ONE tenant-facing shape: identical regardless of caller, and mirrored verbatim into every webhook's `data` field.",
+        "description": "Returns the verification verdict for a session, as the site owner's secret key sees it. `status` is a VERDICT, not a lifecycle marker: `success` means the user PASSED. A session that ran to the end of the flow but missed the age threshold is `failed`, with `reason` explaining why. Possible `status` values: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken`. Account claiming (Xident ID) does not change the tenant-visible status \u2014 a passed verification stays `success` even after a portal account links to it; the internal `claimed` lifecycle state is never returned here. `external_user_id` echoes the `user_id` supplied at init so the session can be correlated to your own user server-side \u2014 do not correlate on the browser callback, which is unsigned. Requires a secret API key (sk_live_) \u2014 a public key gets 403 SECRET_KEY_REQUIRED. This is the ONE tenant-facing shape: identical regardless of caller, and mirrored verbatim into every webhook's `data` field.",
         "produces": [
           "application/json"
         ],
@@ -2783,6 +3000,9 @@
             "name": "token",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2852,6 +3072,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.reviewRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2904,6 +3127,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.AgeEstimationResultDTO"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2974,6 +3200,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.CompleteSessionDTO"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3032,6 +3261,9 @@
             "name": "id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3090,6 +3322,9 @@
             "name": "id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3178,6 +3413,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.LivenessResultDTO"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3248,6 +3486,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.SelfDeclarationDTO"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3306,6 +3547,9 @@
             "name": "token",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3367,6 +3611,9 @@
             "name": "token",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3425,6 +3672,9 @@
             "name": "token",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3488,6 +3738,9 @@
             "schema": {
               "$ref": "#/definitions/github_com_xident-io_api_pkg_telemetry.Payload"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3564,7 +3817,12 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ]
       },
       "post": {
         "security": [
@@ -3592,6 +3850,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.CreateAPIKeyRequestDTO"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3644,6 +3905,9 @@
             "name": "id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3694,6 +3958,9 @@
             "name": "id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3745,6 +4012,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.issueTokenRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3817,6 +4087,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.revokeTokenRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3880,6 +4153,9 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.verifyTokenRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3943,6 +4219,9 @@
             "schema": {
               "$ref": "#/definitions/github_com_xident-io_api_internal_infrastructure_eudiw.WalletValidateRequest"
             }
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -4135,6 +4414,10 @@
     "github_com_xident-io_api_internal_api_response.Meta": {
       "type": "object",
       "properties": {
+        "api_version": {
+          "description": "APIVersion is the dated API version this response was served under.\n\nPresent on EVERY response from the versioned verify surface, including\nerrors \u2014 an integrator debugging a shape mismatch needs to know which\nversion produced the body they are looking at, and an error response is\nexactly when they are looking.\n\nomitempty keeps it off dashboard, admin and portal responses, where a\ndated verify version would be meaningless: the header it is read from is\nonly set inside the /verify/v1 group.",
+          "type": "string"
+        },
         "pagination": {
           "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Pagination"
         },
@@ -4163,6 +4446,23 @@
         }
       }
     },
+    "github_com_xident-io_api_internal_domain_models.VideoGuide": {
+      "type": "object",
+      "properties": {
+        "h": {
+          "type": "number"
+        },
+        "w": {
+          "type": "number"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
+    },
     "github_com_xident-io_api_internal_domain_services.AgeGateCheckResult": {
       "type": "object",
       "properties": {
@@ -4185,6 +4485,40 @@
         },
         "performed": {
           "type": "boolean"
+        }
+      }
+    },
+    "github_com_xident-io_api_internal_domain_services.DataMatchCheckResult": {
+      "type": "object",
+      "properties": {
+        "fields": {
+          "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.DataMatchFields"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "performed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "github_com_xident-io_api_internal_domain_services.DataMatchFields": {
+      "type": "object",
+      "properties": {
+        "date_of_birth": {
+          "type": "string"
+        },
+        "document_number": {
+          "type": "string"
+        },
+        "first_name": {
+          "type": "string"
+        },
+        "last_name": {
+          "type": "string"
+        },
+        "nationality": {
+          "type": "string"
         }
       }
     },
@@ -4214,6 +4548,10 @@
         "callback_url": {
           "type": "string"
         },
+        "expected_ref": {
+          "description": "ExpectedRef is the opaque one-time reference under which the site\nowner's identity claims (data match) are stored. The widget forwards it\nto /requirements/check, which binds the claims to the new session. The\nclaims themselves are NEVER in these params: this struct is returned to\nthe browser on redeem, and the browser must not see them.",
+          "type": "string"
+        },
         "failed_url": {
           "type": "string"
         },
@@ -4221,9 +4559,6 @@
           "type": "string"
         },
         "locale": {
-          "type": "string"
-        },
-        "metadata": {
           "type": "string"
         },
         "min_age": {
@@ -4254,14 +4589,46 @@
         "age": {
           "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.AgeGateCheckResult"
         },
+        "aml": {
+          "description": "AML: sanctions/PEP screening of the extracted identity (document path\nonly; plans/aml-screening.md). ADDED 2026-08-06, third additive field\nafter the v1 freeze. performed:false until screening is enabled.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.CheckResult"
+            }
+          ]
+        },
+        "data_match": {
+          "description": "DataMatch: the site owner's identity claims compared with the document\n(plans/document-data-match.md). ADDED 2026-09-05 as an additive OPTIONAL\nfield: present only when the site owner supplied `expected` at init\nAND a document was read; absent means \"not performed\", so every\nreleased golden stays byte-identical. Unlike the other checks it is a\npointer with omitempty on purpose.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.DataMatchCheckResult"
+            }
+          ]
+        },
         "document": {
           "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.DocumentCheckResult"
+        },
+        "eu_wallet": {
+          "description": "EUWallet: EU Digital Identity Wallet presentation (Path E). ADDED\n2026-08-06 as an additive field after the v1 freeze (announced in the\npublic changelog) \u2014 before this, a wallet-verified session reported\nall four other checks performed:false and looked like nothing ran.\nAppended after the original four so their wire order is untouched.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.CheckResult"
+            }
+          ]
         },
         "face_match": {
           "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.CheckResult"
         },
         "liveness": {
           "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.CheckResult"
+        }
+      }
+    },
+    "github_com_xident-io_api_internal_domain_services.ResultRisk": {
+      "type": "object",
+      "properties": {
+        "band": {
+          "type": "string"
         }
       }
     },
@@ -4288,6 +4655,10 @@
         "status": {
           "description": "Status carries the same public verdict vocabulary as TenantResult.Status\n\u2014 see that field's doc comment for the full list and the `claimed`\nexclusion/projection rule (publicSessionStatus).",
           "type": "string"
+        },
+        "test": {
+          "description": "Test mirrors TenantResult.Test \u2014 see that field's doc. The widget reads\nit to label the settle screen; absent on live sessions.",
+          "type": "boolean"
         },
         "token": {
           "type": "string"
@@ -4322,15 +4693,27 @@
         "reason": {
           "type": "string"
         },
+        "risk": {
+          "description": "Risk is the coarse fraud band \u2014 low | elevated | high \u2014 derived by the\nOCR worker from signals the pipeline already computes (pkg/riskband).\nADDED 2026-08-06, fourth additive field after the v1 freeze (announced\nin the public changelog). Deliberately an object with ONLY the band:\nthe numeric score and per-signal detail stay in the dashboard review\nUI \u2014 a precise score on the wire is an iteration oracle for fraudsters\n(plans/fraud-risk-score.md decision 1). Omitted entirely when no\ndocument-path signals ran \u2014 absent is a weaker claim than \"low\".",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.ResultRisk"
+            }
+          ]
+        },
         "status": {
           "description": "Status is a VERDICT, uniform across every verification approach\n(document, browser check, Xident ID token reuse, and any future path \u2014\ne.g. an EU digital wallet) \u2014 never an internal lifecycle marker. The\npublic vocabulary is: pending, in_progress, success, failed, canceled,\nexpired, pending_tenant_review, awaiting_retake, retaken (see\nmodels/verification_session.go for which of these are named\nconstants vs. literal values written by the cleanup/retake paths;\nnote the single-L American spelling of \"canceled\").\n`claimed` is deliberately ABSENT from this list: it is an internal-only\nlifecycle state (a portal account linked to an already-passed session)\nand is projected to `success` before this struct is built \u2014 see\npublicSessionStatus. Account claiming (Xident ID) does not change the\ntenant-visible status; a passed verification stays `success`.",
           "type": "string"
         },
+        "test": {
+          "description": "Test is true when this verdict came from a TEST-mode session: a\ndeterministic settle driven by a test API key, never a real verification.\nA tenant's access-control code MUST treat a test result as granting\nnothing \u2014 this flag is what makes a test key powerless in the real world.\nADDED 2026-08-26 as an additive optional field (per the new-api-version\nskill's additive lane): omitempty means it is ABSENT on every live\nsession, so all released goldens stay byte-identical.",
+          "type": "boolean"
+        },
         "token": {
           "type": "string"
         },
-        "verification_mode": {
-          "description": "VerificationMode reports the billing/verification kind this session\nresolved to (models.VerificationTypeFull / VerificationTypeToken \u2014 a\nfull document+biometric run vs. a cheap Xident-ID token reuse), sourced\nfrom VerificationSession.VerificationType. It is NOT the request-time\nauto/document/facial override (models.VerificationMode*) \u2014 that knob\nonly steers which methods run and isn't itself part of the result.",
+        "verification_type": {
+          "description": "VerificationType reports WHICH PATH produced this verdict, derived from\nthe evidence the session actually stored (pkg/verificationkind):\n\n\tfull       document path \u2014 OCR and/or document-to-selfie face match\n\tage_check  browser-only path \u2014 liveness and/or age bracket, no document\n\txident_id  returning user reused a bracket already on their account\n\teu_wallet  EU Digital Identity Wallet presentation\n\nIt is DERIVED, not stored. Until 2026-08-12 it was read straight from\nVerificationSession.VerificationType, a column defaulting to \"full\" that\nno live code path ever assigned \u2014 so this field reported \"full\" for every\nsession ever returned, including cheap Xident-ID reuse and browser-only\nage checks. Deriving it from the same evidence billing reads means the\npath shown and the event charged cannot drift apart.\n\nRENAMED 2026-08-13 from `verification_mode` to `verification_type`. The\nold key was named after the OTHER enum \u2014 the request-time\nauto/document/facial override (models.VerificationMode*, still sent as\n`verification_mode` on the INIT request, unchanged). One name meaning two\ndifferent things is what made the SDKs document this field with the\noverride's values. Now: request says mode, response says type.\n\nThe `checks` object below remains the source of truth for exactly which\nmethods ran; this is the one-word summary of which path they belonged to.",
           "type": "string"
         },
         "verified": {
@@ -4363,6 +4746,28 @@
         }
       }
     },
+    "github_com_xident-io_api_pkg_datamatch.Expected": {
+      "type": "object",
+      "properties": {
+        "date_of_birth": {
+          "description": "YYYY-MM-DD",
+          "type": "string"
+        },
+        "document_number": {
+          "type": "string"
+        },
+        "first_name": {
+          "type": "string"
+        },
+        "last_name": {
+          "type": "string"
+        },
+        "nationality": {
+          "description": "ISO 3166-1 alpha-2",
+          "type": "string"
+        }
+      }
+    },
     "github_com_xident-io_api_pkg_optical.FlashPairCapture": {
       "type": "object",
       "properties": {
@@ -4376,6 +4781,16 @@
         },
         "height": {
           "type": "integer"
+        },
+        "schedule_frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/github_com_xident-io_api_pkg_optical.TiltFrame"
+          }
+        },
+        "schedule_id": {
+          "description": "ScheduleID and ScheduleFrames carry the torch-schedule capture, added\n2026-09-09. The server issues a random torch on/off pattern with the\ncapture key; the widget follows it while recording ScheduleFrames and\nechoes back the ID it followed. See torchschedule.go. Optional and\nadditive: an older widget build sends neither and is checked as\nbefore.",
+          "type": "string"
         },
         "timestamp_off_ms": {
           "description": "wall-clock ms since epoch",
@@ -4417,7 +4832,40 @@
         "height": {
           "type": "integer"
         },
+        "keyframe_height": {
+          "type": "integer"
+        },
+        "keyframe_width": {
+          "type": "integer"
+        },
+        "keyframes": {
+          "description": "Keyframes are a handful of frames from the same sequence kept at\nnative camera resolution (added 2026-09-09). The 480 px motion frames\nanswer \"did the colour move\", which needs no detail. Sensor-noise\nconsistency needs the opposite: fine detail that a 480 px JPEG at\nquality 0.6 has already thrown away. Optional and additive, so an\nolder widget build still parses.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/github_com_xident-io_api_pkg_optical.TiltFrame"
+          }
+        },
         "width": {
+          "type": "integer"
+        }
+      }
+    },
+    "github_com_xident-io_api_pkg_optical.TorchSchedule": {
+      "type": "object",
+      "properties": {
+        "flips_ms": {
+          "description": "FlipsMs are offsets from the start of the capture, ascending.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "id": {
+          "description": "ID ties an upload to the schedule that produced it. The widget echoes\nit back; the server compares it against what it stored.",
+          "type": "string"
+        },
+        "window_ms": {
+          "description": "WindowMs is how long the widget should keep recording.",
           "type": "integer"
         }
       }
@@ -4654,6 +5102,13 @@
     "internal_api_handlers_verify.AgeEstimationResultDTO": {
       "type": "object",
       "properties": {
+        "align_id": {
+          "description": "face alignment version the frames went through",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
         "capture_luma": {
           "description": "CaptureLuma is the brightness (0\u2013255 mean luma) of the ALIGNED FACE CROPS\nthe client's age model actually ran on \u2014 not the whole camera frame, which\nreads \"well lit\" for a user backlit by a window whose face is a silhouette.\n\nTelemetry ONLY: it is logged, never stored, and never affects the verdict.\nIt exists because the widget currently applies no image-quality gate at all,\nso a dark-room verdict is invisible. We log the distribution first and set a\ndefensible threshold from real data rather than guessing a constant.",
           "allOf": [
@@ -4668,13 +5123,68 @@
         "estimated_age": {
           "type": "integer"
         },
+        "frames": {
+          "description": "frames the score is averaged over",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
         "gate": {
           "description": "Gate is the age bracket the client classified against (== SnapToBracket(min_age)\nfor a legitimate widget). Optional so older widgets keep working; when present it\nmust be >= the session's MinAge for the result to count as a pass.",
           "type": "integer"
         },
+        "inference_run_id": {
+          "description": "Measurement fields, stored in verification_age_scores and never read by\nthe gate (plans/age-model-improvement.md, Phase 1 step 5). All optional:\na widget that predates them sends none. They are raw JSON on purpose: a\nmalformed value must not fail the whole PATCH (the widget treats any\nerror but AGE_BELOW_THRESHOLD as a delivery failure and abandons the\ndocument fallback), so parseAgeMeasurement turns each bad field into an\nabsent value plus a recorded reason instead of a 400.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "model_sha": {
+          "description": "sha256 of the ONNX bytes the widget loaded",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "outcome": {
+          "description": "scored | no_usable_frames | model_load_failed | inference_failed | model_not_ready",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "policy_version": {
+          "description": "challenge-age routing version (18 -> 21 today)",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "threshold": {
+          "description": "the effective threshold for `gate`",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "threshold_table_id": {
+          "description": "which per-gate threshold table decided `verified`",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
         "verified": {
           "description": "Verified is the client's per-gate classification verdict. Optional for the same\nbackward-compat reason; when present, only true (plus Gate>=MinAge) is a pass.",
           "type": "boolean"
+        },
+        "widget_build": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
         }
       }
     },
@@ -4688,6 +5198,14 @@
         "key": {
           "description": "Key is the HMAC key encoded as base64url (unpadded). Widget should\nbase64url-decode to raw bytes before passing to WebCrypto importKey.",
           "type": "string"
+        },
+        "torch_schedule": {
+          "description": "TorchSchedule is the random torch on/off pattern the widget must\nfollow while recording the optical capture. Added 2026-09-09 as the\ndefence against a replayed recording: the frame-level forensic checks\nall pass on a video of a genuine card, because it IS a genuine card.\nA light pattern the server picks after the session starts cannot be\nin a recording made before it. Stable for the life of the session,\nlike the key, so a widget that re-fetches mid-flow does not change\nthe pattern it is halfway through following.\n\nOptional in the response so an older widget build simply ignores it.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_xident-io_api_pkg_optical.TorchSchedule"
+            }
+          ]
         }
       }
     },
@@ -4831,6 +5349,9 @@
     },
     "internal_api_handlers_verify.LivenessResultDTO": {
       "type": "object",
+      "required": [
+        "passed"
+      ],
       "properties": {
         "actions": {
           "type": "array",
@@ -4862,8 +5383,14 @@
     },
     "internal_api_handlers_verify.PoseSampleRequest": {
       "type": "object",
+      "required": [
+        "pitch",
+        "t",
+        "yaw"
+      ],
       "properties": {
         "pitch": {
+          "description": "required on every sample: positive = looking up",
           "type": "number"
         },
         "t": {
@@ -4871,6 +5398,7 @@
           "type": "integer"
         },
         "yaw": {
+          "description": "required on every sample: positive = head turned right",
           "type": "number"
         }
       }
@@ -4881,6 +5409,10 @@
         "type"
       ],
       "properties": {
+        "content_type": {
+          "description": "ContentType is required for document_video (video/webm or video/mp4)\nand ignored for every photo slot.",
+          "type": "string"
+        },
         "type": {
           "type": "string"
         }
@@ -4894,7 +5426,7 @@
       ],
       "properties": {
         "capture_proof_token": {
-          "description": "Wave 1.2: optional capture-proof HMAC token emitted by the widget.\nFormat: base64url(json_payload).hex(HMAC-SHA256(session_key, encoded_payload))\nPayload: { \"task_id\": \"<will-match-presign-task>\", \"capture_mode\": \"camera\", \"ts\": 1739720400 }\nServer verifies in the worker at S3-download time via pkg/captureguard.\nEmpty when the widget hasn't been upgraded \u2014 soft mode applies.",
+          "description": "Wave 1.2: optional capture-proof HMAC token emitted by the widget.\nFormat: base64url(json_payload).hex(HMAC-SHA256(session_key, encoded_payload))\nPayload: { \"task_id\": \"<will-match-presign-task>\", \"capture_mode\": \"camera\", \"ts\": 1739720400 }\nServer verifies in the worker at S3-download time via pkg/captureguard.\nPayload also carries `img` \u2014 lowercase-hex SHA-256 of the\ndocument_front bytes \u2014 which binds the proof to the exact image.\nEmpty when the widget hasn't been upgraded: soft mode applies unless\nCAPTUREGUARD_REQUIRE_PROOF is set, which rejects it.",
           "type": "string"
         },
         "document_type": {
@@ -4973,8 +5505,10 @@
           ]
         },
         "pose_trajectory": {
-          "description": "Required; the only movement evidence: every sample with a non-negative integer t, never decreasing, at least 20 distinct times spanning at least 1500 ms",
+          "description": "Required; the only movement evidence: 20 to 2000 samples, every sample with t (a non-negative integer, never decreasing), yaw and pitch; at least 20 distinct times; last t minus first t from 1500 to 300000 ms",
           "type": "array",
+          "maxItems": 2000,
+          "minItems": 20,
           "items": {
             "$ref": "#/definitions/internal_api_handlers_verify.PoseSampleRequest"
           }
@@ -4993,6 +5527,14 @@
         },
         "document_type": {
           "type": "string"
+        },
+        "document_video_guide": {
+          "description": "DocumentVideoGuide is where the card sat in the tilt video's frame, as\nfractions of the frame. Optional; validated to the unit square.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_domain_models.VideoGuide"
+            }
+          ]
         },
         "token": {
           "type": "string"
@@ -5113,6 +5655,36 @@
         }
       }
     },
+    "internal_api_handlers_verify.accountReuseRequest": {
+      "type": "object",
+      "required": [
+        "session_id"
+      ],
+      "properties": {
+        "session_id": {
+          "description": "SessionID is the session's `xtk_` token, the same value the widget uses\neverywhere else. Named session_id to match /accounts/register.",
+          "type": "string"
+        }
+      }
+    },
+    "internal_api_handlers_verify.accountReuseResponse": {
+      "type": "object",
+      "properties": {
+        "bracket": {
+          "description": "Bracket is the age bracket the account had already proven, echoed so the\nwidget can show what satisfied the gate without a second call.",
+          "type": "integer"
+        },
+        "status": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        },
+        "verified": {
+          "type": "boolean"
+        }
+      }
+    },
     "internal_api_handlers_verify.ageCheckDTO": {
       "type": "object",
       "properties": {
@@ -5193,11 +5765,33 @@
         }
       }
     },
+    "internal_api_handlers_verify.countryDocumentTypesResponseDTO": {
+      "type": "object",
+      "properties": {
+        "country": {
+          "type": "string"
+        },
+        "types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "internal_api_handlers_verify.createInitRequest": {
       "type": "object",
       "properties": {
         "callback_url": {
           "type": "string"
+        },
+        "expected": {
+          "description": "Expected is the identity data the site owner already holds about the\nuser (data match). The worker compares it with the presented document\nand the result reports match / mismatch / not_on_document per field;\nthe values never come back. Requires a document: purpose\nid_verification or verification_mode document. plans/document-data-match.md.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_xident-io_api_pkg_datamatch.Expected"
+            }
+          ]
         },
         "failed_url": {
           "type": "string"
@@ -5208,11 +5802,12 @@
         "locale": {
           "type": "string"
         },
-        "metadata": {
-          "type": "string"
-        },
         "min_age": {
           "type": "integer"
+        },
+        "mismatch_policy": {
+          "description": "MismatchPolicy: \"report\" (default) records the outcome only; \"review\"\nsends the session to the tenant's review queue on any mismatch.",
+          "type": "string"
         },
         "purpose": {
           "description": "\"age_verification\" (default) or \"id_verification\"",
@@ -5418,6 +6013,15 @@
           "type": "string"
         }
       }
+    }
+  },
+  "parameters": {
+    "XApiVersion": {
+      "name": "X-API-Version",
+      "in": "header",
+      "type": "string",
+      "required": false,
+      "description": "Dated API version, e.g. 2026-08-13. Overrides the version pinned to the API key for this request only; omit it to use the pin. Every response echoes the version it was served under in this same header and in meta.api_version. See https://docs.xident.io/api-versioning"
     }
   }
 }
