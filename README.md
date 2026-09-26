@@ -94,3 +94,5 @@ pnpm -r test
 ## Licence
 
 MIT
+
+This SDK is MIT-licensed. The Xident Services it connects to, including the machine-learning model files served by verify.xident.io, are not covered by this licence; they are Xident's property and are governed by https://xident.io/terms.
