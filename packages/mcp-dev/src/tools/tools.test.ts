@@ -40,6 +40,20 @@ describe("xident_get_endpoint", () => {
     expect(out["auth"]).toBe("api_key");
   });
 
+  it("tells an agent that account reuse needs the API key and the account token", async () => {
+    const out = await getEndpointTool.handler({ path: "/verify/v1/accounts/reuse", method: "POST" }, contextFromEnv({})) as Json;
+    expect(out["auth"]).toBe("api_key+account_token");
+    const headers = (out["security"] as Array<Array<{ name?: string }>>).flat().map((c) => c.name);
+    expect(headers).toEqual(["X-API-Key", "X-Account-Token"]);
+  });
+
+  it("tells an agent that reading the account profile needs both credentials", async () => {
+    const out = await getEndpointTool.handler({ path: "/verify/v1/accounts/me", method: "GET" }, contextFromEnv({})) as Json;
+    expect(out["auth"]).toBe("api_key+account_token");
+    const headers = (out["security"] as Array<Array<{ name?: string }>>).flat().map((c) => c.name);
+    expect(headers).toEqual(["X-API-Key", "X-Account-Token"]);
+  });
+
   it("suggests near matches instead of just failing", async () => {
     const out = await getEndpointTool.handler({ path: "/verify/v1/inti", method: "POST" }, contextFromEnv({})) as Json;
     expect(out["code"]).toBe("ENDPOINT_NOT_FOUND");
