@@ -87,7 +87,86 @@ describe("resolveRefs", () => {
     // A relative file path, not a pointer into this spec, even though its tail looks like one.
     expect(resolveRefs({ $ref: "./definitions/Foo" }, spec)).toEqual({ $unresolved: "./definitions/Foo" });
   });
+
+  it("decodes the JSON Pointer escapes ~1 (a slash) and ~0 (a tilde)", () => {
+    const spec = {
+      swagger: "2.0", info: {}, paths: {},
+      definitions: {
+        "a/b": { title: "slash" },
+        "a~b": { title: "tilde" },
+        "a~1": { title: "tilde then one" },
+        "a/": { title: "slash at the end" },
+      },
+    } as never;
+    expect(resolveRefs({ $ref: "#/definitions/a~1b" }, spec)).toEqual({ title: "slash" });
+    expect(resolveRefs({ $ref: "#/definitions/a~0b" }, spec)).toEqual({ title: "tilde" });
+    // RFC 6901: ~1 is decoded before ~0, so "~01" is a tilde followed by "1",
+    // not a slash.
+    expect(resolveRefs({ $ref: "#/definitions/a~01" }, spec)).toEqual({ title: "tilde then one" });
+  });
 });
+
+type Json = unknown;
+
+/**
+ * Follows a local JSON pointer on its own, without resolveRefs: returns
+ * undefined when any segment is missing. Written separately so the check
+ * below does not trust the code it checks.
+ */
+function pointerTarget(spec: Json, ref: string): Json {
+  if (!ref.startsWith("#/")) return undefined;
+  let node: Json = spec;
+  for (const raw of ref.slice(2).split("/")) {
+    const key = raw.replaceAll("~1", "/").replaceAll("~0", "~");
+    if (node === null || typeof node !== "object" || !Object.prototype.hasOwnProperty.call(node, key)) {
+      return undefined;
+    }
+    node = (node as Record<string, Json>)[key];
+  }
+  return node;
+}
+
+/**
+ * Every "$ref" reachable from the operation at spec.paths[path][method],
+ * followed through the spec to any depth, with the ones that point at
+ * nothing. Independent of resolveRefs and of its depth limit.
+ */
+function brokenRefs(spec: Json, path: string, method: string): string[] {
+  const paths = (spec as { paths: Record<string, Record<string, Json>> }).paths;
+  const broken: string[] = [];
+  const seen = new Set<string>();
+  const stack: Json[] = [paths[path]![method]];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (node === null || typeof node !== "object") continue;
+    if (Array.isArray(node)) {
+      stack.push(...node);
+      continue;
+    }
+    for (const [key, value] of Object.entries(node as Record<string, Json>)) {
+      if (key === "$ref" && typeof value === "string") {
+        if (seen.has(value)) continue;
+        seen.add(value);
+        const target = pointerTarget(spec, value);
+        if (target === undefined) broken.push(value);
+        else stack.push(target);
+      } else {
+        stack.push(value);
+      }
+    }
+  }
+  return broken;
+}
+
+function operations(spec: Json): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  for (const [path, ops] of Object.entries((spec as { paths: Record<string, Record<string, Json>> }).paths)) {
+    for (const method of Object.keys(ops)) {
+      if (["get", "post", "put", "patch", "delete", "head", "options"].includes(method)) out.push([path, method]);
+    }
+  }
+  return out;
+}
 
 describe("the bundled spec", () => {
   it("has no pointer that an endpoint lookup leaves unresolved", () => {
@@ -97,6 +176,29 @@ describe("the bundled spec", () => {
       .filter((ep) => JSON.stringify(ep).includes('"$unresolved"'))
       .map((ep) => `${ep.method} ${ep.path}`);
     expect(broken).toEqual([]);
+  });
+
+  it("has no local $ref, at any depth from any endpoint, that points at nothing", () => {
+    const spec = loadSpec();
+    const ops = operations(spec);
+    expect(ops.length).toBeGreaterThan(50);
+    const broken = ops.flatMap(([path, method]) =>
+      brokenRefs(spec, path, method).map((ref) => `${method.toUpperCase()} ${path} -> ${ref}`),
+    );
+    expect(broken).toEqual([]);
+  });
+
+  it("the check above notices a definition that an endpoint reaches deep down", () => {
+    // Guards the check itself: remove a definition that resolveRefs does not
+    // reach from this endpoint today (it stops at depth 6), and the walk still
+    // reports it.
+    const spec = structuredClone(loadSpec()) as unknown as {
+      definitions: Record<string, unknown>;
+    };
+    const deep = "github_com_xident-io_api_internal_domain_services.DataMatchCheckResult";
+    expect(spec.definitions[deep]).toBeDefined();
+    delete spec.definitions[deep];
+    expect(brokenRefs(spec, "/verify/v1/result/{token}", "get")).toEqual([`#/definitions/${deep}`]);
   });
 
   it("shows the X-API-Version header on a /verify/ endpoint", () => {
