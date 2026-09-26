@@ -15,6 +15,7 @@ describe("findEndpoint", () => {
     expect(ep).not.toBeNull();
     expect(ep!.method).toBe("POST");
     expect(ep!.auth).toBe("api_key");
+    expect(ep!.security).toEqual([[{ scheme: "ApiKeyAuth", in: "header", name: "X-API-Key" }]]);
   });
 
   it("is case-insensitive on the method", () => {
@@ -27,6 +28,70 @@ describe("findEndpoint", () => {
 
   it("returns null for a method the path does not serve", () => {
     expect(findEndpoint("/verify/v1/init", "delete")).toBeNull();
+  });
+});
+
+/** Every object key anywhere in `node`. */
+function keysIn(node: unknown, out = new Set<string>()): Set<string> {
+  if (Array.isArray(node)) for (const v of node) keysIn(v, out);
+  else if (node !== null && typeof node === "object") {
+    for (const [k, v] of Object.entries(node)) {
+      out.add(k);
+      keysIn(v, out);
+    }
+  }
+  return out;
+}
+
+/** Follow keys and array indexes; undefined when a step is missing. */
+function dig(node: unknown, ...steps: Array<string | number>): unknown {
+  let cur = node;
+  for (const step of steps) {
+    if (cur === null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string | number, unknown>)[step];
+  }
+  return cur;
+}
+
+describe("auth", () => {
+  const spec = (security: unknown) =>
+    ({
+      swagger: "2.0", info: {},
+      securityDefinitions: {
+        ApiKeyAuth: { type: "apiKey", in: "header", name: "X-API-Key" },
+        BearerAuth: { type: "apiKey", in: "header", name: "Authorization" },
+        AccountToken: { type: "apiKey", in: "header", name: "X-Account-Token" },
+      },
+      paths: { "/x": { get: security === undefined ? {} : { security } } },
+    }) as never;
+
+  it("is none, with no requirements, for an empty security list", () => {
+    const ep = findEndpoint("/x", "get", spec([]))!;
+    expect(ep.auth).toBe("none");
+    expect(ep.security).toEqual([]);
+  });
+
+  it("is unknown, with security null, when the spec says nothing", () => {
+    const ep = findEndpoint("/x", "get", spec(undefined))!;
+    expect(ep.auth).toBe("unknown");
+    expect(ep.security).toBeNull();
+  });
+
+  it("joins credentials of one requirement with + and alternatives with ' or '", () => {
+    const both = findEndpoint("/x", "get", spec([{ AccountToken: [], ApiKeyAuth: [] }]))!;
+    expect(both.auth).toBe("api_key+account_token");
+    const either = findEndpoint("/x", "get", spec([{ ApiKeyAuth: [] }, { BearerAuth: [] }]))!;
+    expect(either.auth).toBe("api_key or bearer");
+    expect(either.security).toEqual([
+      [{ scheme: "ApiKeyAuth", in: "header", name: "X-API-Key" }],
+      [{ scheme: "BearerAuth", in: "header", name: "Authorization" }],
+    ]);
+  });
+
+  it("keeps a scheme the spec does not define, by name", () => {
+    const ep = findEndpoint("/x", "get", spec([{ Mystery: [] }]))!;
+    expect(ep.auth).toBe("Mystery");
+    expect(ep.security).toEqual([[{ scheme: "Mystery" }]]);
   });
 });
 
@@ -50,6 +115,39 @@ describe("resolveRefs", () => {
     } as never;
     const resolved = resolveRefs({ $ref: "#/definitions/Node" }, spec) as Record<string, unknown>;
     expect(JSON.stringify(resolved)).toContain("$circular");
+  });
+
+  it("counts pointer hops, not nesting: a deep envelope with two hops resolves fully", () => {
+    const spec = {
+      swagger: "2.0", info: {}, paths: {},
+      definitions: {
+        Envelope: { type: "object", properties: { success: { type: "boolean" } } },
+        Result: { type: "object", properties: { checks: { $ref: "#/definitions/Checks" } } },
+        Checks: { type: "object", properties: { age: { type: "string" } } },
+      },
+    } as never;
+    // responses > 200 > schema > allOf > [1] > properties > data: seven levels, one hop to Result.
+    const responses = {
+      200: { schema: { allOf: [{ $ref: "#/definitions/Envelope" }, { properties: { data: { $ref: "#/definitions/Result" } } }] } },
+    };
+    const out = resolveRefs(responses, spec);
+    expect(dig(out, 200, "schema", "allOf", 1, "properties", "data", "properties", "checks", "properties", "age"))
+      .toEqual({ type: "string" });
+    expect(keysIn(out).has("$ref")).toBe(false);
+  });
+
+  it("stops a very long chain with a $truncated marker, never a raw $ref", () => {
+    const definitions: Record<string, unknown> = {};
+    for (let i = 0; i < 40; i++) {
+      definitions[`D${i}`] = { type: "object", properties: { next: { $ref: `#/definitions/D${i + 1}` } } };
+    }
+    definitions["D40"] = { type: "string" };
+    const spec = { swagger: "2.0", info: {}, paths: {}, definitions } as never;
+    const out = resolveRefs({ $ref: "#/definitions/D0" }, spec);
+    const keys = keysIn(out);
+    expect(keys.has("$ref")).toBe(false);
+    expect(keys.has("$truncated")).toBe(true);
+    expect(JSON.stringify(out)).toMatch(/"\$truncated":"#\/definitions\/D\d+"/);
   });
 
   it("follows a pointer into the shared parameters section", () => {
@@ -169,13 +267,46 @@ function operations(spec: Json): Array<[string, string]> {
 }
 
 describe("the bundled spec", () => {
-  it("has no pointer that an endpoint lookup leaves unresolved", () => {
+  it("leaves no raw $ref and no $unresolved or $truncated marker in any endpoint output", () => {
+    // $circular is fine: it marks a real self-reference, which cannot be inlined.
     const endpoints = allEndpoints();
     expect(endpoints.length).toBeGreaterThan(50);
-    const broken = endpoints
-      .filter((ep) => JSON.stringify(ep).includes('"$unresolved"'))
-      .map((ep) => `${ep.method} ${ep.path}`);
-    expect(broken).toEqual([]);
+    const found = endpoints.flatMap((ep) =>
+      [...keysIn(ep)]
+        .filter((k) => k === "$ref" || k === "$unresolved" || k === "$truncated")
+        .map((k) => `${ep.method} ${ep.path}: ${k}`),
+    );
+    expect(found).toEqual([]);
+  });
+
+  it("resolves the result behind the {success, data, meta} envelope all the way down", () => {
+    const ep = findEndpoint("/verify/v1/result/{token}", "get")!;
+    const data = dig(ep.responses, "200", "schema", "allOf", 1, "properties", "data", "properties") as Record<string, unknown>;
+    // Four hops deep: TenantResult > ResultChecks > DataMatchCheckResult > DataMatchFields.
+    expect(dig(data, "checks", "properties", "data_match", "allOf", 0, "properties", "fields", "properties", "first_name"))
+      .toEqual({ type: "string" });
+    expect(dig(data, "risk", "allOf", 0, "properties", "band")).toEqual({ type: "string" });
+  });
+
+  it("keeps the deep fields of GET /public/v1/status", () => {
+    expect(JSON.stringify(findEndpoint("/public/v1/status", "get"))).toContain('"latency_ms"');
+  });
+
+  it("names both credentials and their headers for POST /verify/v1/accounts/reuse", () => {
+    const ep = findEndpoint("/verify/v1/accounts/reuse", "post")!;
+    expect(ep.auth).toBe("api_key+account_token");
+    expect(ep.security).toEqual([
+      [
+        { scheme: "ApiKeyAuth", in: "header", name: "X-API-Key" },
+        { scheme: "AccountToken", in: "header", name: "X-Account-Token" },
+      ],
+    ]);
+  });
+
+  it("says an unauthenticated endpoint documents no security", () => {
+    const ep = findEndpoint("/verify/v1/init/{token}", "get")!;
+    expect(ep.auth).toBe("unknown");
+    expect(ep.security).toBeNull();
   });
 
   it("has no local $ref, at any depth from any endpoint, that points at nothing", () => {
