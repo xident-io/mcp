@@ -2985,7 +2985,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Returns the verification verdict for a session, as the site owner's secret key sees it. `status` is a VERDICT, not a lifecycle marker: `success` means the user PASSED. A session that ran to the end of the flow but missed the age threshold is `failed`, with `reason` explaining why. Possible `status` values: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken`. Account claiming (Xident ID) does not change the tenant-visible status \u2014 a passed verification stays `success` even after a portal account links to it; the internal `claimed` lifecycle state is never returned here. `external_user_id` echoes the `user_id` supplied at init so the session can be correlated to your own user server-side \u2014 do not correlate on the browser callback, which is unsigned. Requires a secret API key (sk_live_) \u2014 a public key gets 403 SECRET_KEY_REQUIRED. This is the ONE tenant-facing shape: identical regardless of caller, and mirrored verbatim into every webhook's `data` field.",
+        "description": "Returns the verification verdict for a session, as the site owner's secret key sees it. `status` is a VERDICT, not a lifecycle marker: `success` means the user PASSED. A session that ran to the end of the flow but missed the age threshold is `failed`, with `reason` explaining why. Possible `status` values: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken`. Account claiming (Xident ID) does not change the tenant-visible status \u2014 a passed verification stays `success` even after a portal account links to it; the internal `claimed` lifecycle state is never returned here. `external_user_id` echoes the `user_id` supplied at init so the session can be correlated to your own user server-side \u2014 do not correlate on the browser callback, which is unsigned. Requires a server-side key: a secret key (`sk_live_` or `sk_test_`), or an agent key (`ak_live_` or `ak_test_`) that has the `verification:read` scope. A public key gets 403 SECRET_KEY_REQUIRED. This is the ONE tenant-facing shape: identical regardless of caller, and mirrored verbatim into every webhook's `data` field.",
         "produces": [
           "application/json"
         ],
@@ -5104,10 +5104,7 @@
       "properties": {
         "align_id": {
           "description": "face alignment version the frames went through",
-          "type": "array",
-          "items": {
-            "type": "integer"
-          }
+          "type": "string"
         },
         "capture_luma": {
           "description": "CaptureLuma is the brightness (0\u2013255 mean luma) of the ALIGNED FACE CROPS\nthe client's age model actually ran on \u2014 not the whole camera frame, which\nreads \"well lit\" for a user backlit by a window whose face is a silhouette.\n\nTelemetry ONLY: it is logged, never stored, and never affects the verdict.\nIt exists because the widget currently applies no image-quality gate at all,\nso a dark-room verdict is invisible. We log the distribution first and set a\ndefensible threshold from real data rather than guessing a constant.",
@@ -5125,66 +5122,42 @@
         },
         "frames": {
           "description": "frames the score is averaged over",
-          "type": "array",
-          "items": {
-            "type": "integer"
-          }
+          "type": "integer"
         },
         "gate": {
           "description": "Gate is the age bracket the client classified against (== SnapToBracket(min_age)\nfor a legitimate widget). Optional so older widgets keep working; when present it\nmust be >= the session's MinAge for the result to count as a pass.",
           "type": "integer"
         },
         "inference_run_id": {
-          "description": "Measurement fields, stored in verification_age_scores and never read by\nthe gate (plans/age-model-improvement.md, Phase 1 step 5). All optional:\na widget that predates them sends none. They are raw JSON on purpose: a\nmalformed value must not fail the whole PATCH (the widget treats any\nerror but AGE_BELOW_THRESHOLD as a delivery failure and abandons the\ndocument fallback), so parseAgeMeasurement turns each bad field into an\nabsent value plus a recorded reason instead of a 400.",
-          "type": "array",
-          "items": {
-            "type": "integer"
-          }
+          "description": "one ID per inference run; a retransmission of the same run repeats it",
+          "type": "string"
         },
         "model_sha": {
           "description": "sha256 of the ONNX bytes the widget loaded",
-          "type": "array",
-          "items": {
-            "type": "integer"
-          }
+          "type": "string"
         },
         "outcome": {
           "description": "scored | no_usable_frames | model_load_failed | inference_failed | model_not_ready",
-          "type": "array",
-          "items": {
-            "type": "integer"
-          }
+          "type": "string"
         },
         "policy_version": {
           "description": "challenge-age routing version (18 -> 21 today)",
-          "type": "array",
-          "items": {
-            "type": "integer"
-          }
+          "type": "string"
         },
         "threshold": {
           "description": "the effective threshold for `gate`",
-          "type": "array",
-          "items": {
-            "type": "integer"
-          }
+          "type": "number"
         },
         "threshold_table_id": {
           "description": "which per-gate threshold table decided `verified`",
-          "type": "array",
-          "items": {
-            "type": "integer"
-          }
+          "type": "string"
         },
         "verified": {
           "description": "Verified is the client's per-gate classification verdict. Optional for the same\nbackward-compat reason; when present, only true (plus Gate>=MinAge) is a pass.",
           "type": "boolean"
         },
         "widget_build": {
-          "type": "array",
-          "items": {
-            "type": "integer"
-          }
+          "type": "string"
         }
       }
     },
@@ -5354,9 +5327,10 @@
       ],
       "properties": {
         "actions": {
-          "type": "array",
-          "items": {
-            "type": "integer"
+          "description": "optional map of action name to pass or fail, e.g. {\"blink\": true}; stored as sent, not checked",
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
           }
         },
         "challenge_id": {
