@@ -12,6 +12,12 @@
   "host": "api.xident.io",
   "basePath": "/",
   "securityDefinitions": {
+    "AccountToken": {
+      "description": "Xident ID account access token: the access_token that the account sign-in endpoints return, such as POST /verify/v1/accounts/login. Sent together with X-API-Key. Also accepted in the Authorization header with the AccountBearer scheme.",
+      "type": "apiKey",
+      "name": "X-Account-Token",
+      "in": "header"
+    },
     "ApiKeyAuth": {
       "description": "API key authentication for SDK endpoints (/api/v1/*).",
       "type": "apiKey",
@@ -602,7 +608,19 @@
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/internal_api_handlers.PublicStatusResponse"
+              "allOf": [
+                {
+                  "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/definitions/internal_api_handlers.PublicStatusResponse"
+                    }
+                  }
+                }
+              ]
             }
           }
         }
@@ -716,7 +734,19 @@
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/internal_api_handlers.VersionsResponse"
+              "allOf": [
+                {
+                  "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/definitions/internal_api_handlers.VersionsResponse"
+                    }
+                  }
+                }
+              ]
             }
           }
         }
@@ -1048,7 +1078,7 @@
             "BearerAuth": []
           }
         ],
-        "description": "Returns an empty list \u2014 account_connections table dropped for ARCOM compliance.",
+        "description": "Always returns an empty list: connected sites are no longer recorded.",
         "produces": [
           "application/json"
         ],
@@ -1099,7 +1129,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Authenticate an end user with email and password. Returns JWT access/refresh tokens and account info. Optionally checks if the user has a verified age bracket >= min_age.",
+        "description": "Authenticate an end user with email and password. Returns JWT access/refresh tokens and account info. Optionally checks whether the user has a verified age bracket of at least min_age.",
         "consumes": [
           "application/json"
         ],
@@ -1745,6 +1775,12 @@
     },
     "/verify/v1/accounts/reuse": {
       "post": {
+        "security": [
+          {
+            "AccountToken": [],
+            "ApiKeyAuth": []
+          }
+        ],
         "description": "Completes the session if the signed-in account already holds an unexpired age bracket satisfying the site's minimum age. Returns 409 when it does not, and the caller must run a normal verification.",
         "consumes": [
           "application/json"
@@ -1774,7 +1810,19 @@
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/internal_api_handlers_verify.accountReuseResponse"
+              "allOf": [
+                {
+                  "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/definitions/internal_api_handlers_verify.accountReuseResponse"
+                    }
+                  }
+                }
+              ]
             }
           },
           "401": {
@@ -2110,9 +2158,6 @@
             "description": "europe | templates | all (default: europe)",
             "name": "scope",
             "in": "query"
-          },
-          {
-            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2141,16 +2186,25 @@
             "name": "code",
             "in": "path",
             "required": true
-          },
-          {
-            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/internal_api_handlers_verify.countryDocumentTypesResponseDTO"
+              "allOf": [
+                {
+                  "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/definitions/internal_api_handlers_verify.countryDocumentTypesResponseDTO"
+                    }
+                  }
+                }
+              ]
             }
           },
           "400": {
@@ -2193,9 +2247,6 @@
             "name": "api_key",
             "in": "query",
             "required": true
-          },
-          {
-            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2345,9 +2396,6 @@
             "name": "token",
             "in": "path",
             "required": true
-          },
-          {
-            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2473,9 +2521,6 @@
             "name": "token",
             "in": "path",
             "required": true
-          },
-          {
-            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2561,7 +2606,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Submits the movement evidence for a previously issued challenge: the head pose trajectory (numbers only, no images). The server checks that the head turned in the issued order and completes the challenge. The result counts for a session only after PATCH /verify/v1/sessions/{id}/liveness attaches the challenge to it.",
+        "description": "Submits the movement evidence for a previously issued challenge: the head pose trajectory (numbers only, no images). The server checks that the head turned in the issued order and completes the challenge. The result counts for a session only after PATCH /verify/v1/sessions/{id}/liveness attaches the challenge to it. A challenge can be answered once: a 200 answer uses it up, and so does a 400 INVALID_TRAJECTORY or DURATION_TOO_SHORT, so get a new challenge from GET /verify/v1/liveness/challenge before trying again. The frames field is accepted and ignored; do not send images.",
         "consumes": [
           "application/json"
         ],
@@ -2945,9 +2990,6 @@
             "name": "user_id",
             "in": "query",
             "required": true
-          },
-          {
-            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -2985,7 +3027,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Returns the verification verdict for a session, as the site owner's secret key sees it. `status` is a VERDICT, not a lifecycle marker: `success` means the user PASSED. A session that ran to the end of the flow but missed the age threshold is `failed`, with `reason` explaining why. Possible `status` values: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken`. Account claiming (Xident ID) does not change the tenant-visible status \u2014 a passed verification stays `success` even after a portal account links to it; the internal `claimed` lifecycle state is never returned here. `external_user_id` echoes the `user_id` supplied at init so the session can be correlated to your own user server-side \u2014 do not correlate on the browser callback, which is unsigned. Requires a server-side key: a secret key (`sk_live_` or `sk_test_`), or an agent key (`ak_live_` or `ak_test_`) that has the `verification:read` scope. A public key gets 403 SECRET_KEY_REQUIRED. This is the ONE tenant-facing shape: identical regardless of caller, and mirrored verbatim into every webhook's `data` field.",
+        "description": "Returns the verification verdict for a session, as the site owner's secret key sees it. `status` is a VERDICT, not a lifecycle marker: `success` means the user PASSED. A session that ran to the end of the flow but missed the age threshold is `failed`, with `reason` explaining why. Possible `status` values: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken`. Account claiming (Xident ID) does not change the tenant-visible status \u2014 a passed verification stays `success` even after a portal account links to it; the internal `claimed` lifecycle state is never returned here. `external_user_id` echoes the `user_id` supplied at init so the session can be correlated to your own user server-side \u2014 do not correlate on the browser callback, which is unsigned. Requires a server-side credential: a secret key (`sk_live_` or `sk_test_`), an agent key (`ak_live_` or `ak_test_`), or an agent OAuth access token (`xat_`). An agent key or access token needs the `verification:read` scope. A public key gets 403 SECRET_KEY_REQUIRED. This is the ONE tenant-facing shape: identical regardless of caller, and mirrored verbatim into every webhook's `data` field.",
         "produces": [
           "application/json"
         ],
@@ -3009,7 +3051,19 @@
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.TenantResult"
+              "allOf": [
+                {
+                  "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.TenantResult"
+                    }
+                  }
+                }
+              ]
             }
           },
           "400": {
@@ -3100,7 +3154,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Stores client-side age estimation result on the verification session.",
+        "description": "Stores client-side age estimation result on the verification session. The measurement fields (inference_run_id, model_sha, threshold_table_id, policy_version, align_id, widget_build, frames, threshold, outcome) are optional and never change the verdict. A measurement value of the wrong type or outside its documented limits is ignored: the request still succeeds and that value is not stored.",
         "consumes": [
           "application/json"
         ],
@@ -3657,7 +3711,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Returns the widget-facing verdict for a session \u2014 no per-check detail, no age gate, no document/country data, and a masked failure reason (see services.MaskSubjectReason). `status` uses the same public vocabulary as /verify/v1/result/{token}: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken` \u2014 the internal `claimed` lifecycle state (portal account linking) is never returned; a passed verification stays `success`. This is the ONE subject-facing shape: it does not vary by which key type authenticated the request (public or secret both get it), because a credential-dependent response shape is exactly what this endpoint is designed NOT to have.",
+        "description": "Returns the widget-facing verdict for a session \u2014 no per-check detail, no age gate, no document/country data, and a masked failure reason. `status` uses the same public vocabulary as /verify/v1/result/{token}: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken` \u2014 the internal `claimed` lifecycle state (portal account linking) is never returned; a passed verification stays `success`. This is the ONE subject-facing shape: it does not vary by which key type authenticated the request (public or secret both get it), because a credential-dependent response shape is exactly what this endpoint is designed NOT to have.",
         "produces": [
           "application/json"
         ],
@@ -3681,7 +3735,19 @@
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.SubjectResult"
+              "allOf": [
+                {
+                  "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.SubjectResult"
+                    }
+                  }
+                }
+              ]
             }
           },
           "400": {
@@ -4578,7 +4644,7 @@
           "type": "string"
         },
         "verification_mode": {
-          "description": "VerificationMode: \"auto\" (default) | \"document\" | \"facial\".\nSee models.VerificationMode* for what each enforces.",
+          "description": "VerificationMode: \"auto\" (default), \"document\" (an ID document is always\nrequired) or \"facial\" (on-device checks only, never a document).",
           "type": "string"
         }
       }
@@ -4590,7 +4656,7 @@
           "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.AgeGateCheckResult"
         },
         "aml": {
-          "description": "AML: sanctions/PEP screening of the extracted identity (document path\nonly; plans/aml-screening.md). ADDED 2026-08-06, third additive field\nafter the v1 freeze. performed:false until screening is enabled.",
+          "description": "sanctions and PEP (politically exposed person) screening of the identity read from the document; document path only; performed is false until screening is enabled",
           "allOf": [
             {
               "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.CheckResult"
@@ -4598,7 +4664,7 @@
           ]
         },
         "data_match": {
-          "description": "DataMatch: the site owner's identity claims compared with the document\n(plans/document-data-match.md). ADDED 2026-09-05 as an additive OPTIONAL\nfield: present only when the site owner supplied `expected` at init\nAND a document was read; absent means \"not performed\", so every\nreleased golden stays byte-identical. Unlike the other checks it is a\npointer with omitempty on purpose.",
+          "description": "the identity data the site owner sent as `expected` at init, compared with the document; present only when `expected` was sent and a document was read",
           "allOf": [
             {
               "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.DataMatchCheckResult"
@@ -4645,19 +4711,19 @@
           "type": "string"
         },
         "reason": {
-          "description": "Reason is masked via MaskSubjectReason \u2014 never the raw\nVerificationSession.Reason vocabulary.",
+          "description": "a short failure reason for display, less detailed than the one the site owner sees",
           "type": "string"
         },
         "remaining_attempts": {
-          "description": "RemainingAttempts is left nil by SubjectResultView. Computing it needs\nthe API key's configured max-attempts setting (see\nverify/sessions_update.go computeRemainingAttempts), which isn't\nreachable from a *models.VerificationSession alone \u2014 a caller that has\nlooked up the API key sets this field after calling SubjectResultView.",
+          "description": "for a failed session started with a user_id: how many more attempts are left in this chain of retakes",
           "type": "integer"
         },
         "status": {
-          "description": "Status carries the same public verdict vocabulary as TenantResult.Status\n\u2014 see that field's doc comment for the full list and the `claimed`\nexclusion/projection rule (publicSessionStatus).",
+          "description": "the same verdict values as the status of GET /verify/v1/result/{token}",
           "type": "string"
         },
         "test": {
-          "description": "Test mirrors TenantResult.Test \u2014 see that field's doc. The widget reads\nit to label the settle screen; absent on live sessions.",
+          "description": "true when the verdict came from a test-mode session; absent on live sessions",
           "type": "boolean"
         },
         "token": {
@@ -4694,7 +4760,7 @@
           "type": "string"
         },
         "risk": {
-          "description": "Risk is the coarse fraud band \u2014 low | elevated | high \u2014 derived by the\nOCR worker from signals the pipeline already computes (pkg/riskband).\nADDED 2026-08-06, fourth additive field after the v1 freeze (announced\nin the public changelog). Deliberately an object with ONLY the band:\nthe numeric score and per-signal detail stay in the dashboard review\nUI \u2014 a precise score on the wire is an iteration oracle for fraudsters\n(plans/fraud-risk-score.md decision 1). Omitted entirely when no\ndocument-path signals ran \u2014 absent is a weaker claim than \"low\".",
+          "description": "coarse fraud risk band: low, elevated or high; omitted when no document checks ran, which is not the same as low",
           "allOf": [
             {
               "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.ResultRisk"
@@ -4702,7 +4768,7 @@
           ]
         },
         "status": {
-          "description": "Status is a VERDICT, uniform across every verification approach\n(document, browser check, Xident ID token reuse, and any future path \u2014\ne.g. an EU digital wallet) \u2014 never an internal lifecycle marker. The\npublic vocabulary is: pending, in_progress, success, failed, canceled,\nexpired, pending_tenant_review, awaiting_retake, retaken (see\nmodels/verification_session.go for which of these are named\nconstants vs. literal values written by the cleanup/retake paths;\nnote the single-L American spelling of \"canceled\").\n`claimed` is deliberately ABSENT from this list: it is an internal-only\nlifecycle state (a portal account linked to an already-passed session)\nand is projected to `success` before this struct is built \u2014 see\npublicSessionStatus. Account claiming (Xident ID) does not change the\ntenant-visible status; a passed verification stays `success`.",
+          "description": "the verdict, the same for every verification path: pending, in_progress, success, failed, canceled (one L), expired, pending_tenant_review, awaiting_retake or retaken; linking a Xident ID account never changes it, and a passed verification stays success",
           "type": "string"
         },
         "test": {
@@ -4713,7 +4779,7 @@
           "type": "string"
         },
         "verification_type": {
-          "description": "VerificationType reports WHICH PATH produced this verdict, derived from\nthe evidence the session actually stored (pkg/verificationkind):\n\n\tfull       document path \u2014 OCR and/or document-to-selfie face match\n\tage_check  browser-only path \u2014 liveness and/or age bracket, no document\n\txident_id  returning user reused a bracket already on their account\n\teu_wallet  EU Digital Identity Wallet presentation\n\nIt is DERIVED, not stored. Until 2026-08-12 it was read straight from\nVerificationSession.VerificationType, a column defaulting to \"full\" that\nno live code path ever assigned \u2014 so this field reported \"full\" for every\nsession ever returned, including cheap Xident-ID reuse and browser-only\nage checks. Deriving it from the same evidence billing reads means the\npath shown and the event charged cannot drift apart.\n\nRENAMED 2026-08-13 from `verification_mode` to `verification_type`. The\nold key was named after the OTHER enum \u2014 the request-time\nauto/document/facial override (models.VerificationMode*, still sent as\n`verification_mode` on the INIT request, unchanged). One name meaning two\ndifferent things is what made the SDKs document this field with the\noverride's values. Now: request says mode, response says type.\n\nThe `checks` object below remains the source of truth for exactly which\nmethods ran; this is the one-word summary of which path they belonged to.",
+          "description": "which path produced the verdict: full (document and face match), age_check (in the browser: liveness and/or age, no document), xident_id (a returning user reused an age already proven on their Xident ID) or eu_wallet (EU Digital Identity Wallet); named verification_mode before 2026-08-13; checks says exactly which checks ran",
           "type": "string"
         },
         "verified": {
@@ -4783,13 +4849,14 @@
           "type": "integer"
         },
         "schedule_frames": {
+          "description": "optional: frames recorded while following that schedule",
           "type": "array",
           "items": {
             "$ref": "#/definitions/github_com_xident-io_api_pkg_optical.TiltFrame"
           }
         },
         "schedule_id": {
-          "description": "ScheduleID and ScheduleFrames carry the torch-schedule capture, added\n2026-09-09. The server issues a random torch on/off pattern with the\ncapture key; the widget follows it while recording ScheduleFrames and\nechoes back the ID it followed. See torchschedule.go. Optional and\nadditive: an older widget build sends neither and is checked as\nbefore.",
+          "description": "optional: ID of the torch on/off schedule the widget followed (issued with the capture key)",
           "type": "string"
         },
         "timestamp_off_ms": {
@@ -5104,10 +5171,11 @@
       "properties": {
         "align_id": {
           "description": "face alignment version the frames went through",
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
         },
         "capture_luma": {
-          "description": "CaptureLuma is the brightness (0\u2013255 mean luma) of the ALIGNED FACE CROPS\nthe client's age model actually ran on \u2014 not the whole camera frame, which\nreads \"well lit\" for a user backlit by a window whose face is a silhouette.\n\nTelemetry ONLY: it is logged, never stored, and never affects the verdict.\nIt exists because the widget currently applies no image-quality gate at all,\nso a dark-room verdict is invisible. We log the distribution first and set a\ndefensible threshold from real data rather than guessing a constant.",
+          "description": "brightness (0 to 255) of the face crops the age model ran on; logged for diagnostics, never stored, no effect on the verdict",
           "allOf": [
             {
               "$ref": "#/definitions/internal_api_handlers_verify.CaptureLumaDTO"
@@ -5122,42 +5190,59 @@
         },
         "frames": {
           "description": "frames the score is averaged over",
-          "type": "integer"
+          "type": "integer",
+          "maximum": 1000,
+          "minimum": 0
         },
         "gate": {
-          "description": "Gate is the age bracket the client classified against (== SnapToBracket(min_age)\nfor a legitimate widget). Optional so older widgets keep working; when present it\nmust be >= the session's MinAge for the result to count as a pass.",
+          "description": "age threshold the widget checked the person against, e.g. 18; a pass needs it to be at least the session's minimum age",
           "type": "integer"
         },
         "inference_run_id": {
           "description": "one ID per inference run; a retransmission of the same run repeats it",
-          "type": "string"
+          "type": "string",
+          "maxLength": 128
         },
         "model_sha": {
           "description": "sha256 of the ONNX bytes the widget loaded",
-          "type": "string"
+          "type": "string",
+          "maxLength": 128
         },
         "outcome": {
-          "description": "scored | no_usable_frames | model_load_failed | inference_failed | model_not_ready",
-          "type": "string"
+          "description": "how the age model run ended",
+          "type": "string",
+          "enum": [
+            "scored",
+            "no_usable_frames",
+            "model_load_failed",
+            "inference_failed",
+            "model_not_ready"
+          ]
         },
         "policy_version": {
-          "description": "challenge-age routing version (18 -> 21 today)",
-          "type": "string"
+          "description": "version of the widget's rule for which age threshold to check for the session's minimum age",
+          "type": "string",
+          "maxLength": 64
         },
         "threshold": {
           "description": "the effective threshold for `gate`",
-          "type": "number"
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         },
         "threshold_table_id": {
           "description": "which per-gate threshold table decided `verified`",
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
         },
         "verified": {
-          "description": "Verified is the client's per-gate classification verdict. Optional for the same\nbackward-compat reason; when present, only true (plus Gate>=MinAge) is a pass.",
+          "description": "the widget's verdict that the person is at least gate years old; when sent, a pass needs true",
           "type": "boolean"
         },
         "widget_build": {
-          "type": "string"
+          "description": "build of the verification widget that sent this result",
+          "type": "string",
+          "maxLength": 64
         }
       }
     },
@@ -5364,15 +5449,15 @@
       ],
       "properties": {
         "pitch": {
-          "description": "required on every sample: positive = looking up",
+          "description": "required on every sample: degrees; positive = looking up",
           "type": "number"
         },
         "t": {
-          "description": "required on every sample: a non-negative integer, never decreasing",
+          "description": "required on every sample: milliseconds since the first sample, a non-negative integer, never decreasing; a sample with the same t as the one before must have the same yaw and pitch",
           "type": "integer"
         },
         "yaw": {
-          "description": "required on every sample: positive = head turned right",
+          "description": "required on every sample: degrees; positive = head turned to the person's own right (also the right side of the mirrored selfie preview)",
           "type": "number"
         }
       }
@@ -5400,7 +5485,7 @@
       ],
       "properties": {
         "capture_proof_token": {
-          "description": "Wave 1.2: optional capture-proof HMAC token emitted by the widget.\nFormat: base64url(json_payload).hex(HMAC-SHA256(session_key, encoded_payload))\nPayload: { \"task_id\": \"<will-match-presign-task>\", \"capture_mode\": \"camera\", \"ts\": 1739720400 }\nServer verifies in the worker at S3-download time via pkg/captureguard.\nPayload also carries `img` \u2014 lowercase-hex SHA-256 of the\ndocument_front bytes \u2014 which binds the proof to the exact image.\nEmpty when the widget hasn't been upgraded: soft mode applies unless\nCAPTUREGUARD_REQUIRE_PROOF is set, which rejects it.",
+          "description": "optional: set by the Xident verification widget, a signed proof that the document image came from its camera capture; when the server requires a proof, a request without one is refused",
           "type": "string"
         },
         "document_type": {
@@ -5464,7 +5549,7 @@
           "type": "integer"
         },
         "frames": {
-          "description": "Optional \u2014 future server-side ML analysis",
+          "description": "accepted and ignored; do not send images",
           "type": "array",
           "items": {
             "type": "string"
@@ -5479,7 +5564,7 @@
           ]
         },
         "pose_trajectory": {
-          "description": "Required; the only movement evidence: 20 to 2000 samples, every sample with t (a non-negative integer, never decreasing), yaw and pitch; at least 20 distinct times; last t minus first t from 1500 to 300000 ms",
+          "description": "Required; the only movement evidence: 20 to 2000 samples, every sample with t (a non-negative integer, never decreasing), yaw and pitch; two samples with the same t must have the same yaw and pitch; at least 20 distinct times; last t minus first t from 1500 to 300000 ms",
           "type": "array",
           "maxItems": 2000,
           "minItems": 20,
@@ -5760,7 +5845,7 @@
           "type": "string"
         },
         "expected": {
-          "description": "Expected is the identity data the site owner already holds about the\nuser (data match). The worker compares it with the presented document\nand the result reports match / mismatch / not_on_document per field;\nthe values never come back. Requires a document: purpose\nid_verification or verification_mode document. plans/document-data-match.md.",
+          "description": "Expected is the identity data the site owner already holds about the\nuser (data match). The worker compares it with the presented document\nand the result reports match / mismatch / not_on_document per field;\nthe values never come back. Requires a document: purpose\nid_verification or verification_mode document.",
           "allOf": [
             {
               "$ref": "#/definitions/github_com_xident-io_api_pkg_datamatch.Expected"
