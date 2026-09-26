@@ -19,13 +19,19 @@
       "in": "header"
     },
     "ApiKeyAuth": {
-      "description": "Your Xident API key: a secret key (sk_live_ or sk_test_) from your backend, an agent key (ak_live_ or ak_test_), or a public key (pk_live_ or pk_test_) where the endpoint allows one.",
+      "description": "Your Xident API key: a secret key (sk_live_ or sk_test_) from your backend, an agent key (ak_live_ or ak_test_), or a public key (pk_live_ or pk_test_) where the endpoint allows one. It can also be sent as Authorization: Bearer <key>.",
       "type": "apiKey",
       "name": "X-API-Key",
       "in": "header"
     },
     "BearerAuth": {
-      "description": "Bearer token used by Xident's own web apps. No endpoint in the public reference uses it.",
+      "description": "A credential in the Authorization header, as Bearer <token>. On every endpoint that takes an API key, Authorization: Bearer <your API key> works the same as X-API-Key.",
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header"
+    },
+    "OAuthBearerAuth": {
+      "description": "OAuth 2.0 access token from POST /oauth/token, sent as Authorization: Bearer <access_token>.",
       "type": "apiKey",
       "name": "Authorization",
       "in": "header"
@@ -2623,7 +2629,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Submits the movement evidence for a previously issued challenge: the head pose trajectory (numbers only, no images). The server checks that the head turned in the issued order and completes the challenge. The result counts for a session only after PATCH /verify/v1/sessions/{id}/liveness attaches the challenge to it. A challenge can be answered once: a 200 answer uses it up, and so does a 400 INVALID_TRAJECTORY or DURATION_TOO_SHORT, so get a new challenge from GET /verify/v1/liveness/challenge before trying again. The frames field is accepted and ignored; do not send images. Trajectory rules: pose_trajectory has 20 to 2000 samples, each with t, yaw and pitch. t is a whole number of milliseconds; any non-negative start value is accepted, t never decreases, the samples cover at least 20 distinct t values, and the last t minus the first is 1500 to 300000. Two samples with the same t must have the same yaw and pitch. yaw and pitch are not degrees: they are the units the Xident widget computes from MediaPipe Face Mesh landmarks (1 = nose tip, 33 and 263 = outer eye corners), with x and y normalized to the unmirrored camera image. yaw = -50 \u00d7 (dL - dR) / (dL + dR), where dL = x1 - x33 and dR = x263 - x1, minus the median yaw of the calibration frames in which the head faces the camera; it runs from about -50 to +50, and positive is the person's own right (also the right side of a mirrored selfie preview). pitch = b - 100 \u00d7 (y1 - (y33 + y263) / 2) / D, where D is the distance between landmarks 33 and 263 and b is the median of the same quantity (100 \u00d7 (y1 - (y33 + y263) / 2) / D) over those calibration frames; positive is looking up.",
+        "description": "Submits the movement evidence for a previously issued challenge: the head pose trajectory (numbers only, no images). The server checks that the head turned in the issued order and completes the challenge. The result counts for a session only after PATCH /verify/v1/sessions/{id}/liveness attaches the challenge to it. A challenge can be answered once: a 200 answer uses it up, and so does a 400 INVALID_TRAJECTORY or DURATION_TOO_SHORT, so get a new challenge from GET /verify/v1/liveness/challenge before trying again. The frames field is accepted and ignored; do not send images. A request is refused with 400 INVALID_TRAJECTORY unless pose_trajectory has 20 to 2000 samples, each with t, yaw and pitch; t is a whole number of milliseconds, not negative (any start value) and never decreasing; the samples cover at least 20 distinct t values; the last t minus the first is 1500 to 300000; and two samples with the same t have the same yaw and pitch.",
         "consumes": [
           "application/json"
         ],
@@ -2956,6 +2962,17 @@
           "SDK"
         ],
         "summary": "Check verification requirements (authenticated)",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "expected_ref from the redeemed init token (data match): links the identity data the site owner sent as expected to the new session",
+            "name": "expected_ref",
+            "in": "query"
+          },
+          {
+            "$ref": "#/parameters/XApiVersion"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2975,12 +2992,7 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           }
-        },
-        "parameters": [
-          {
-            "$ref": "#/parameters/XApiVersion"
-          }
-        ]
+        }
       }
     },
     "/verify/v1/requirements/check": {
@@ -3007,6 +3019,12 @@
             "name": "user_id",
             "in": "query",
             "required": true
+          },
+          {
+            "type": "string",
+            "description": "expected_ref from the redeemed init token (data match): links the identity data the site owner sent as expected to the new session",
+            "name": "expected_ref",
+            "in": "query"
           }
         ],
         "responses": {
@@ -3664,7 +3682,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Starts a new attempt for a session that did not pass: returns a new session token linked to the original, in the same retake chain, and the widget restarts capture against it. Refused with 409 RETAKE_NOT_ALLOWED for a session that passed, was canceled or was already retaken, and for test sessions; refused with 409 RETAKE_LIMIT_EXCEEDED after 3 retakes in one chain.",
+        "description": "Starts a new attempt linked to the given session: returns a new session token in the same retake chain, and the widget restarts capture against it. Refused with 409 RETAKE_NOT_ALLOWED when the session's status is success, canceled or retaken, or when it is a test session; every other status can be retaken. Refused with 409 RETAKE_LIMIT_EXCEEDED after 3 retakes in one chain.",
         "consumes": [
           "application/json"
         ],
@@ -4494,7 +4512,7 @@
       "type": "object",
       "properties": {
         "api_version": {
-          "description": "the dated API version this response was served under; present on every response, errors included, from an operation that takes X-API-Version",
+          "description": "the dated API version this response was served under, on responses from operations that take X-API-Version, errors included; absent when the request is refused before its version is resolved: a missing or invalid API key (401), a rate limit (429) or an invalid X-API-Version (400 INVALID_API_VERSION)",
           "type": "string"
         },
         "pagination": {
@@ -4628,7 +4646,7 @@
           "type": "string"
         },
         "expected_ref": {
-          "description": "opaque one-time reference to the identity data the site owner sent as expected; pass it to /verify/v1/requirements/check, which links that data to the new session",
+          "description": "opaque one-time reference to the identity data the site owner sent as expected; pass it as the expected_ref query parameter of GET /verify/v1/requirements/check, which links that data to the new session",
           "type": "string"
         },
         "failed_url": {
@@ -4893,9 +4911,6 @@
         "age_verified": {
           "type": "boolean"
         },
-        "connected_sites_count": {
-          "type": "integer"
-        },
         "display_name": {
           "type": "string"
         },
@@ -5131,13 +5146,6 @@
         "latency",
         "visibility",
         "gyro_unavailable"
-      ],
-      "x-enum-varnames": [
-        "KindGyro",
-        "KindLight",
-        "KindLatency",
-        "KindVisibility",
-        "KindGyroUnavailable"
       ]
     },
     "github_com_xident-io_api_pkg_telemetry.LatencyStage": {
@@ -5146,11 +5154,6 @@
         "camera_ready",
         "first_frame",
         "capture_pressed"
-      ],
-      "x-enum-varnames": [
-        "StageCameraReady",
-        "StageFirstFrame",
-        "StageCapturePressed"
       ]
     },
     "github_com_xident-io_api_pkg_telemetry.Payload": {
@@ -5346,7 +5349,7 @@
           "minimum": 0
         },
         "gate": {
-          "description": "age threshold the widget checked the person against, e.g. 18; a pass needs it to be at least the session's minimum age",
+          "description": "the age threshold, in years, that the widget checked the person against, for example 18",
           "type": "integer"
         },
         "inference_run_id": {
@@ -5387,7 +5390,7 @@
           "maxLength": 64
         },
         "verified": {
-          "description": "the widget's verdict that the person is at least gate years old; when sent, a pass needs true",
+          "description": "the widget's own result for gate: true when it judged the person to be at least gate years old",
           "type": "boolean"
         },
         "widget_build": {
@@ -5600,7 +5603,7 @@
       ],
       "properties": {
         "pitch": {
-          "description": "required on every sample: head pitch in Xident widget units, not degrees; positive = looking up",
+          "description": "required on every sample: head pitch as the Xident widget measures it; positive = looking up",
           "type": "number"
         },
         "t": {
@@ -5608,7 +5611,7 @@
           "type": "integer"
         },
         "yaw": {
-          "description": "required on every sample: head yaw in Xident widget units (about -50 to +50), not degrees; positive = the person's own right",
+          "description": "required on every sample: head yaw as the Xident widget measures it; positive = the person's own right",
           "type": "number"
         }
       }
@@ -5715,7 +5718,7 @@
           ]
         },
         "pose_trajectory": {
-          "description": "required: 20 to 2000 head pose samples, the only movement evidence; the rules and units are in the description of POST /verify/v1/liveness/verify",
+          "description": "required: 20 to 2000 head pose samples, the only movement evidence; the rules are in the description of POST /verify/v1/liveness/verify",
           "type": "array",
           "maxItems": 2000,
           "minItems": 20,
@@ -6231,7 +6234,7 @@
       "in": "header",
       "type": "string",
       "required": false,
-      "description": "Dated API version, e.g. 2026-08-13. Overrides the version pinned to the API key for this request only; omit it to use the pin. Every response echoes the version it was served under in this same header and in meta.api_version. See https://docs.xident.io/api-versioning"
+      "description": "Dated API version, e.g. 2026-08-13. Overrides the version pinned to the API key for this request only; omit it to use the pin. The response echoes the version it was served under in this same header and in meta.api_version, except when the request is refused before its version is resolved: a missing or invalid API key (401), a rate limit (429) or an invalid X-API-Version (400 INVALID_API_VERSION). See https://docs.xident.io/api-versioning"
     }
   }
 }

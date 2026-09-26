@@ -29,6 +29,33 @@ describe("findEndpoint", () => {
   it("returns null for a method the path does not serve", () => {
     expect(findEndpoint("/verify/v1/init", "delete")).toBeNull();
   });
+
+  it("looks up only the spec's own keys, never Object.prototype", () => {
+    for (const path of ["__proto__", "constructor", "toString", "hasOwnProperty"]) {
+      expect(findEndpoint(path, "get"), path).toBeNull();
+    }
+    for (const method of ["__proto__", "constructor", "toString", "valueOf"]) {
+      expect(findEndpoint("/verify/v1/init", method), method).toBeNull();
+    }
+    // Both halves inherited: Object.prototype.constructor is a function.
+    expect(findEndpoint("__proto__", "constructor")).toBeNull();
+    expect(findEndpoint("constructor", "constructor")).toBeNull();
+    // A path the paths object only inherits is not in the spec.
+    const inherited = {
+      swagger: "2.0", info: {},
+      paths: Object.create({ "/inherited": { get: { summary: "not in the spec" } } }),
+    } as never;
+    expect(findEndpoint("/inherited", "get", inherited)).toBeNull();
+  });
+
+  it("does not take a path item's shared parameters for an operation", () => {
+    const spec = {
+      swagger: "2.0", info: {},
+      paths: { "/x": { parameters: [{ name: "id", in: "path" }], get: { summary: "x" } } },
+    } as never;
+    expect(findEndpoint("/x", "parameters", spec)).toBeNull();
+    expect(findEndpoint("/x", "get", spec)).not.toBeNull();
+  });
 });
 
 /** Every object key anywhere in `node`. */

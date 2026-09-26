@@ -243,13 +243,19 @@ function toDoc(path: string, method: string, op: RawOperation, spec: SwaggerSpec
   };
 }
 
-/** Exact lookup. Returns null for an unknown path or method — never throws. */
+/**
+ * Exact lookup. Returns null for an unknown path or method — never throws.
+ * Only the spec's own keys count, and only HTTP methods: a path or method
+ * such as "__proto__" or "constructor" must not reach Object.prototype, and a
+ * path item's shared "parameters" list is not an operation.
+ */
 export function findEndpoint(path: string, method: string, spec = loadSpec()): EndpointDoc | null {
+  if (!Object.hasOwn(spec.paths, path)) return null;
   const ops = spec.paths[path];
-  if (!ops) return null;
   const key = method.toLowerCase();
+  if (!ops || !HTTP_METHODS.has(key) || !Object.hasOwn(ops, key)) return null;
   const op = ops[key];
-  if (!op) return null;
+  if (!op || typeof op !== "object") return null;
   return toDoc(path, key, op, spec);
 }
 
