@@ -303,6 +303,27 @@ describe("the bundled spec", () => {
     ]);
   });
 
+  it("names the account token on every route that needs one", () => {
+    // The API checks X-API-Key AND the account token on these routes (the
+    // accountAuthed group); api#29 publishes both, in one requirement.
+    for (const [method, path] of [
+      ["post", "/verify/v1/accounts/reuse"],
+      ["get", "/verify/v1/accounts/me"],
+      ["delete", "/verify/v1/accounts/me"],
+      ["get", "/verify/v1/accounts/connections"],
+      ["post", "/verify/v1/accounts/passkey/register/begin"],
+      ["post", "/verify/v1/accounts/passkey/register/finish"],
+      ["get", "/verify/v1/accounts/passkeys"],
+      ["delete", "/verify/v1/accounts/passkeys/{id}"],
+      ["post", "/verify/v1/verification-tokens/issue"],
+      ["post", "/verify/v1/verification-tokens/revoke"],
+    ] as const) {
+      const ep = findEndpoint(path, method)!;
+      expect(ep, `${method} ${path}`).not.toBeNull();
+      expect(ep.auth, `${method} ${path}`).toBe("api_key+account_token");
+    }
+  });
+
   it("says an unauthenticated endpoint documents no security", () => {
     const ep = findEndpoint("/verify/v1/init/{token}", "get")!;
     expect(ep.auth).toBe("unknown");

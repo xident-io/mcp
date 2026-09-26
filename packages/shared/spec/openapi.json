@@ -4,7 +4,7 @@
   ],
   "swagger": "2.0",
   "info": {
-    "description": "B2B SaaS identity and age verification API. Three route groups: /api/v1 (SDK, API key auth), /dashboard/v1 (dashboard, JWT auth), /admin/v1 (admin panel, JWT + 2FA auth).",
+    "description": "Xident age and identity verification API. Server-side calls authenticate with an API key in the X-API-Key header.",
     "title": "Xident API",
     "contact": {},
     "version": "1.0"
@@ -19,13 +19,13 @@
       "in": "header"
     },
     "ApiKeyAuth": {
-      "description": "API key authentication for SDK endpoints (/api/v1/*).",
+      "description": "Your Xident API key: a secret key (sk_live_ or sk_test_) from your backend, an agent key (ak_live_ or ak_test_), or a public key (pk_live_ or pk_test_) where the endpoint allows one.",
       "type": "apiKey",
       "name": "X-API-Key",
       "in": "header"
     },
     "BearerAuth": {
-      "description": "JWT Bearer token for dashboard and admin endpoints.",
+      "description": "Bearer token used by Xident's own web apps. No endpoint in the public reference uses it.",
       "type": "apiKey",
       "name": "Authorization",
       "in": "header"
@@ -45,6 +45,12 @@
         "responses": {
           "200": {
             "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.JWKS"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
             "schema": {
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
@@ -66,7 +72,8 @@
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+              "type": "object",
+              "additionalProperties": true
             }
           }
         }
@@ -74,7 +81,7 @@
     },
     "/oauth/authorize": {
       "get": {
-        "description": "Validates parameters, checks for existing consent, creates a Redis session, and redirects to the portal consent screen.",
+        "description": "Validates the request, checks for an existing consent, and redirects the user to the Xident consent screen.",
         "tags": [
           "OAuth"
         ],
@@ -115,7 +122,7 @@
           },
           {
             "type": "string",
-            "description": "Nonce for ID token replay protection",
+            "description": "Nonce, returned in the ID token so the client can match it to this request",
             "name": "nonce",
             "in": "query"
           },
@@ -218,13 +225,19 @@
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+              "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.IntrospectionResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/internal_api_handlers_oauth.ErrorResponse"
             }
           },
           "401": {
             "description": "Unauthorized",
             "schema": {
-              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+              "$ref": "#/definitions/internal_api_handlers_oauth.ErrorResponse"
             }
           }
         }
@@ -277,10 +290,16 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/internal_api_handlers_oauth.ErrorResponse"
+            }
+          },
           "401": {
             "description": "Unauthorized",
             "schema": {
-              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+              "$ref": "#/definitions/internal_api_handlers_oauth.ErrorResponse"
             }
           }
         }
@@ -348,19 +367,25 @@
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+              "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.TokenResponse"
             }
           },
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+              "$ref": "#/definitions/internal_api_handlers_oauth.ErrorResponse"
             }
           },
           "401": {
             "description": "Unauthorized",
             "schema": {
-              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+              "$ref": "#/definitions/internal_api_handlers_oauth.ErrorResponse"
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "schema": {
+              "$ref": "#/definitions/internal_api_handlers_oauth.ErrorResponse"
             }
           }
         }
@@ -385,11 +410,17 @@
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+              "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.UserInfoResponse"
             }
           },
           "401": {
             "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/internal_api_handlers_oauth.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
             "schema": {
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
@@ -919,7 +950,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Safe to expose: the authenticated tenant queries its own opaque user namespace only.",
+        "description": "Returns whether one of your users has a face enrolled for 2FA. Only your own users are visible.",
         "produces": [
           "application/json"
         ],
@@ -1072,10 +1103,8 @@
       "get": {
         "security": [
           {
+            "AccountToken": [],
             "ApiKeyAuth": []
-          },
-          {
-            "BearerAuth": []
           }
         ],
         "description": "Always returns an empty list: connected sites are no longer recorded.",
@@ -1204,10 +1233,8 @@
       "get": {
         "security": [
           {
+            "AccountToken": [],
             "ApiKeyAuth": []
-          },
-          {
-            "BearerAuth": []
           }
         ],
         "description": "Returns the authenticated account's profile information and verified age brackets. Requires account JWT via X-Account-Token header.",
@@ -1247,10 +1274,8 @@
       "delete": {
         "security": [
           {
+            "AccountToken": [],
             "ApiKeyAuth": []
-          },
-          {
-            "BearerAuth": []
           }
         ],
         "description": "Permanently deletes the authenticated account and all associated data including passkeys, verified ages, and site connections. This action cannot be undone. Implements GDPR Art. 17 right to erasure.",
@@ -1413,10 +1438,8 @@
       "post": {
         "security": [
           {
+            "AccountToken": [],
             "ApiKeyAuth": []
-          },
-          {
-            "BearerAuth": []
           }
         ],
         "description": "Starts a WebAuthn credential creation ceremony for the authenticated account. Returns creation options and a session ID for the finish step. Requires account JWT via X-Account-Token header.",
@@ -1461,10 +1484,8 @@
       "post": {
         "security": [
           {
+            "AccountToken": [],
             "ApiKeyAuth": []
-          },
-          {
-            "BearerAuth": []
           }
         ],
         "description": "Completes the WebAuthn credential creation ceremony by validating the authenticator response and storing the new passkey. The request body is the raw WebAuthn attestation and carries nothing else, so the session ID from register/begin travels in the X-Session-ID header. Optional X-Passkey-Name header to name the passkey. Requires account JWT via X-Account-Token header.",
@@ -1540,10 +1561,8 @@
       "get": {
         "security": [
           {
+            "AccountToken": [],
             "ApiKeyAuth": []
-          },
-          {
-            "BearerAuth": []
           }
         ],
         "description": "Returns all registered passkeys for the authenticated account, including platform, browser, sign count, and last-used timestamps. Requires account JWT via X-Account-Token header.",
@@ -1600,10 +1619,8 @@
       "delete": {
         "security": [
           {
+            "AccountToken": [],
             "ApiKeyAuth": []
-          },
-          {
-            "BearerAuth": []
           }
         ],
         "description": "Removes a registered passkey from the authenticated account. The passkey must belong to the account. Requires account JWT via X-Account-Token header.",
@@ -1975,7 +1992,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Blacklists the face of the person who completed one of YOUR terminal DOCUMENT verification sessions. Works for 12 months after the session \u2014 the face embedding is retained for that period and then permanently deleted. Browser-only (Path A) sessions never capture a face and are rejected with SESSION_HAS_NO_FACE_DATA; sessions past retention are rejected with SESSION_FACE_DATA_EXPIRED. Async \u2014 the entry appears in the list once processed.",
+        "description": "Blacklists the face of the person who completed one of YOUR terminal DOCUMENT verification sessions. Works for 12 months after the session \u2014 the face embedding is retained for that period and then permanently deleted. Browser-only sessions never capture a face and are rejected with SESSION_HAS_NO_FACE_DATA; sessions past retention are rejected with SESSION_FACE_DATA_EXPIRED. Async \u2014 the entry appears in the list once processed.",
         "consumes": [
           "application/json"
         ],
@@ -2278,7 +2295,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Queues a face enrollment job for a user. The face image is processed asynchronously by ML workers.",
+        "description": "Queues a face enrollment job for a user. The face image is processed asynchronously.",
         "consumes": [
           "application/json"
         ],
@@ -2381,7 +2398,7 @@
     },
     "/verify/v1/handoff/{token}": {
       "get": {
-        "description": "Public (the token is the auth, as with /init/:token). Single use: the token is spent atomically on the first call, the session is marked as handed off to mobile, the waiting desktop is notified over SSE, and the phone receives the session's full verification context.",
+        "description": "Needs no API key: the handoff token is the credential. Single use: the token is spent atomically on the first call, the session is marked as handed off to mobile, the waiting desktop is notified over SSE, and the phone receives the session's full verification context.",
         "produces": [
           "application/json"
         ],
@@ -2606,7 +2623,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Submits the movement evidence for a previously issued challenge: the head pose trajectory (numbers only, no images). The server checks that the head turned in the issued order and completes the challenge. The result counts for a session only after PATCH /verify/v1/sessions/{id}/liveness attaches the challenge to it. A challenge can be answered once: a 200 answer uses it up, and so does a 400 INVALID_TRAJECTORY or DURATION_TOO_SHORT, so get a new challenge from GET /verify/v1/liveness/challenge before trying again. The frames field is accepted and ignored; do not send images.",
+        "description": "Submits the movement evidence for a previously issued challenge: the head pose trajectory (numbers only, no images). The server checks that the head turned in the issued order and completes the challenge. The result counts for a session only after PATCH /verify/v1/sessions/{id}/liveness attaches the challenge to it. A challenge can be answered once: a 200 answer uses it up, and so does a 400 INVALID_TRAJECTORY or DURATION_TOO_SHORT, so get a new challenge from GET /verify/v1/liveness/challenge before trying again. The frames field is accepted and ignored; do not send images. Trajectory rules: pose_trajectory has 20 to 2000 samples, each with t, yaw and pitch. t is a whole number of milliseconds; any non-negative start value is accepted, t never decreases, the samples cover at least 20 distinct t values, and the last t minus the first is 1500 to 300000. Two samples with the same t must have the same yaw and pitch. yaw and pitch are not degrees: they are the units the Xident widget computes from MediaPipe Face Mesh landmarks (1 = nose tip, 33 and 263 = outer eye corners), with x and y normalized to the unmirrored camera image. yaw = -50 \u00d7 (dL - dR) / (dL + dR), where dL = x1 - x33 and dR = x263 - x1, minus the median yaw of the calibration frames in which the head faces the camera; it runs from about -50 to +50, and positive is the person's own right (also the right side of a mirrored selfie preview). pitch = b - 100 \u00d7 (y1 - (y33 + y263) / 2) / D, where D is the distance between landmarks 33 and 263 and b is the median of the same quantity (100 \u00d7 (y1 - (y33 + y263) / 2) / D) over those calibration frames; positive is looking up.",
         "consumes": [
           "application/json"
         ],
@@ -2847,7 +2864,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Submits an L5 flash-pair or L6 tilt-sequence capture for OVD analysis. The verdict is stored on the session and folded into the OCR worker's docverify decision. Hard-rejects on capture-proof failure.",
+        "description": "Submits a flash-pair or tilt-sequence capture of the document for the optical security feature (hologram) checks. The result is stored on the session and counts toward the document verification. A capture whose capture proof fails is refused.",
         "consumes": [
           "application/json"
         ],
@@ -2931,7 +2948,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Determines which verification methods are required using the API key from authentication middleware.",
+        "description": "Determines which verification methods are required using the authenticated API key.",
         "produces": [
           "application/json"
         ],
@@ -3154,7 +3171,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Stores client-side age estimation result on the verification session. The measurement fields (inference_run_id, model_sha, threshold_table_id, policy_version, align_id, widget_build, frames, threshold, outcome) are optional and never change the verdict. A measurement value of the wrong type or outside its documented limits is ignored: the request still succeeds and that value is not stored.",
+        "description": "Stores client-side age estimation result on the verification session. The measurement fields (inference_run_id, model_sha, threshold_table_id, policy_version, align_id, widget_build, frames, threshold, outcome) are optional and never change the verdict. A measurement value of the wrong type or outside its documented limits is ignored: the request still succeeds and that value is not stored. A missing or ignored inference_run_id is replaced by an ID the server derives from the result, so a retransmission of the same result is stored once.",
         "consumes": [
           "application/json"
         ],
@@ -3647,7 +3664,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Called by the widget after a tenant rejects with reject_mode=retry. Returns a new session token linked to the original; widget restarts capture against it. Enforces max 3 retakes per chain.",
+        "description": "Starts a new attempt for a session that did not pass: returns a new session token linked to the original, in the same retake chain, and the widget restarts capture against it. Refused with 409 RETAKE_NOT_ALLOWED for a session that passed, was canceled or was already retaken, and for test sessions; refused with 409 RETAKE_LIMIT_EXCEEDED after 3 retakes in one chain.",
         "consumes": [
           "application/json"
         ],
@@ -3696,7 +3713,7 @@
             }
           },
           "409": {
-            "description": "session not in awaiting_retake state OR retake limit exceeded",
+            "description": "RETAKE_NOT_ALLOWED or RETAKE_LIMIT_EXCEEDED",
             "schema": {
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
@@ -3784,7 +3801,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Persists gyroscope, ambient light, capture-latency, and page-visibility samples collected by the verify widget for offline behavioral-model training. Pure ingest \u2014 no risk-score effect today.",
+        "description": "Stores gyroscope, ambient light, capture-latency and page-visibility samples collected by the verification widget during capture.",
         "consumes": [
           "application/json"
         ],
@@ -4052,10 +4069,8 @@
       "post": {
         "security": [
           {
+            "AccountToken": [],
             "ApiKeyAuth": []
-          },
-          {
-            "BearerAuth": []
           }
         ],
         "description": "Issues a verification token for the authenticated account's verified age bracket. The embedding site can later use this token to check the user's age without re-verification. Requires account JWT via X-Account-Token header and API key context.",
@@ -4127,10 +4142,8 @@
       "post": {
         "security": [
           {
+            "AccountToken": [],
             "ApiKeyAuth": []
-          },
-          {
-            "BearerAuth": []
           }
         ],
         "description": "Revokes an active verification token so it can no longer be used for age checks. The token must belong to the authenticated account. Requires account JWT via X-Account-Token header.",
@@ -4265,7 +4278,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Receives an mso_mdoc age attestation from a user's EU Digital Identity Wallet,",
+        "description": "Receives an mso_mdoc age attestation from a user's EU Digital Identity Wallet, checks its cryptographic proof against the EU Trusted List, and stores the result on the verification session. No camera or biometric data is involved.",
         "consumes": [
           "application/json"
         ],
@@ -4481,7 +4494,7 @@
       "type": "object",
       "properties": {
         "api_version": {
-          "description": "APIVersion is the dated API version this response was served under.\n\nPresent on EVERY response from the versioned verify surface, including\nerrors \u2014 an integrator debugging a shape mismatch needs to know which\nversion produced the body they are looking at, and an error response is\nexactly when they are looking.\n\nomitempty keeps it off dashboard, admin and portal responses, where a\ndated verify version would be meaningless: the header it is read from is\nonly set inside the /verify/v1 group.",
+          "description": "the dated API version this response was served under; present on every response, errors included, from an operation that takes X-API-Version",
           "type": "string"
         },
         "pagination": {
@@ -4615,7 +4628,7 @@
           "type": "string"
         },
         "expected_ref": {
-          "description": "ExpectedRef is the opaque one-time reference under which the site\nowner's identity claims (data match) are stored. The widget forwards it\nto /requirements/check, which binds the claims to the new session. The\nclaims themselves are NEVER in these params: this struct is returned to\nthe browser on redeem, and the browser must not see them.",
+          "description": "opaque one-time reference to the identity data the site owner sent as expected; pass it to /verify/v1/requirements/check, which links that data to the new session",
           "type": "string"
         },
         "failed_url": {
@@ -4644,8 +4657,71 @@
           "type": "string"
         },
         "verification_mode": {
-          "description": "VerificationMode: \"auto\" (default), \"document\" (an ID document is always\nrequired) or \"facial\" (on-device checks only, never a document).",
+          "description": "\"auto\" (default), \"document\" (an ID document is always required) or \"facial\" (on-device checks only, never a document)",
           "type": "string"
+        }
+      }
+    },
+    "github_com_xident-io_api_internal_domain_services.IntrospectionResponse": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "client_id": {
+          "type": "string"
+        },
+        "exp": {
+          "type": "integer"
+        },
+        "iat": {
+          "type": "integer"
+        },
+        "iss": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "sub": {
+          "type": "string"
+        },
+        "token_type": {
+          "type": "string"
+        }
+      }
+    },
+    "github_com_xident-io_api_internal_domain_services.JWK": {
+      "type": "object",
+      "properties": {
+        "alg": {
+          "type": "string"
+        },
+        "e": {
+          "type": "string"
+        },
+        "kid": {
+          "type": "string"
+        },
+        "kty": {
+          "type": "string"
+        },
+        "n": {
+          "type": "string"
+        },
+        "use": {
+          "type": "string"
+        }
+      }
+    },
+    "github_com_xident-io_api_internal_domain_services.JWKS": {
+      "type": "object",
+      "properties": {
+        "keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.JWK"
+          }
         }
       }
     },
@@ -4675,7 +4751,7 @@
           "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.DocumentCheckResult"
         },
         "eu_wallet": {
-          "description": "EUWallet: EU Digital Identity Wallet presentation (Path E). ADDED\n2026-08-06 as an additive field after the v1 freeze (announced in the\npublic changelog) \u2014 before this, a wallet-verified session reported\nall four other checks performed:false and looked like nothing ran.\nAppended after the original four so their wire order is untouched.",
+          "description": "EU Digital Identity Wallet presentation",
           "allOf": [
             {
               "$ref": "#/definitions/github_com_xident-io_api_internal_domain_services.CheckResult"
@@ -4715,7 +4791,7 @@
           "type": "string"
         },
         "remaining_attempts": {
-          "description": "for a failed session started with a user_id: how many more attempts are left in this chain of retakes",
+          "description": "failed sessions started with a user_id only: the project's max_verification_attempts minus the retakes before this session in its retake chain, at least 0; informational, the server allows at most 3 retakes per chain and a new session starts a new chain",
           "type": "integer"
         },
         "status": {
@@ -4753,7 +4829,7 @@
           "type": "string"
         },
         "ip_country": {
-          "description": "IPCountry is where the END USER connected from (IP-derived at session\ncreation) \u2014 a fraud/geo signal for the tenant. Distinct from\nchecks.document.country, which is the ISSUING country extracted from\nthe presented document. ADDED 2026-08-04 as the first additive field\nafter the v1 freeze (announced in the public changelog); additive-only\nrules apply \u2014 never rename or remove.",
+          "description": "country the end user connected from, from their IP address when the session started; not the document's issuing country (checks.document.country)",
           "type": "string"
         },
         "reason": {
@@ -4772,7 +4848,7 @@
           "type": "string"
         },
         "test": {
-          "description": "Test is true when this verdict came from a TEST-mode session: a\ndeterministic settle driven by a test API key, never a real verification.\nA tenant's access-control code MUST treat a test result as granting\nnothing \u2014 this flag is what makes a test key powerless in the real world.\nADDED 2026-08-26 as an additive optional field (per the new-api-version\nskill's additive lane): omitempty means it is ABSENT on every live\nsession, so all released goldens stay byte-identical.",
+          "description": "true when the verdict came from a test-mode session (a test API key), never a real verification; treat it as granting nothing; absent on live sessions",
           "type": "boolean"
         },
         "token": {
@@ -4783,8 +4859,66 @@
           "type": "string"
         },
         "verified": {
-          "description": "Verified is the one boolean a tenant should branch on for access\ncontrol \u2014 derived server-side from Status, never trusted from a client.",
+          "description": "the one value to base access control on; set by the server from status, never taken from a client",
           "type": "boolean"
+        }
+      }
+    },
+    "github_com_xident-io_api_internal_domain_services.TokenResponse": {
+      "type": "object",
+      "properties": {
+        "access_token": {
+          "type": "string"
+        },
+        "expires_in": {
+          "type": "integer"
+        },
+        "id_token": {
+          "type": "string"
+        },
+        "refresh_token": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "token_type": {
+          "type": "string"
+        }
+      }
+    },
+    "github_com_xident-io_api_internal_domain_services.UserInfoResponse": {
+      "type": "object",
+      "properties": {
+        "age_verified": {
+          "type": "boolean"
+        },
+        "connected_sites_count": {
+          "type": "integer"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "email_verified": {
+          "type": "boolean"
+        },
+        "meets_threshold": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "sub": {
+          "type": "string"
+        },
+        "verified_brackets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -4906,7 +5040,7 @@
           "type": "integer"
         },
         "keyframes": {
-          "description": "Keyframes are a handful of frames from the same sequence kept at\nnative camera resolution (added 2026-09-09). The 480 px motion frames\nanswer \"did the colour move\", which needs no detail. Sensor-noise\nconsistency needs the opposite: fine detail that a 480 px JPEG at\nquality 0.6 has already thrown away. Optional and additive, so an\nolder widget build still parses.",
+          "description": "optional: a few frames of the same sequence at the camera's full resolution",
           "type": "array",
           "items": {
             "$ref": "#/definitions/github_com_xident-io_api_pkg_optical.TiltFrame"
@@ -4921,18 +5055,18 @@
       "type": "object",
       "properties": {
         "flips_ms": {
-          "description": "FlipsMs are offsets from the start of the capture, ascending.",
+          "description": "when to switch the torch, in milliseconds from the start of the capture, ascending",
           "type": "array",
           "items": {
             "type": "integer"
           }
         },
         "id": {
-          "description": "ID ties an upload to the schedule that produced it. The widget echoes\nit back; the server compares it against what it stored.",
+          "description": "send it back as schedule_id with the capture",
           "type": "string"
         },
         "window_ms": {
-          "description": "WindowMs is how long the widget should keep recording.",
+          "description": "how long to keep recording, in milliseconds",
           "type": "integer"
         }
       }
@@ -4941,28 +5075,30 @@
       "type": "object",
       "properties": {
         "hidden": {
-          "description": "Visibility fields (KindVisibility).",
+          "description": "visibility events: whether the page was hidden",
           "type": "boolean"
         },
         "hidden_ms": {
+          "description": "visibility events: how long it was hidden, in milliseconds",
           "type": "integer"
         },
         "kind": {
           "$ref": "#/definitions/github_com_xident-io_api_pkg_telemetry.EventKind"
         },
         "mean": {
-          "description": "Light field (KindLight).",
+          "description": "light events: mean pixel brightness of the camera frame",
           "type": "number"
         },
         "ms": {
+          "description": "latency events: how long it took, in milliseconds",
           "type": "integer"
         },
         "reason": {
-          "description": "gyro_unavailable carries a reason string (denied, missing API, \u2026).",
+          "description": "gyro_unavailable events: why the gyroscope could not be read",
           "type": "string"
         },
         "stage": {
-          "description": "Latency fields (KindLatency).",
+          "description": "latency events: which step was timed",
           "allOf": [
             {
               "$ref": "#/definitions/github_com_xident-io_api_pkg_telemetry.LatencyStage"
@@ -4970,17 +5106,19 @@
           ]
         },
         "ts_ms": {
-          "description": "Gyro/Light/Visibility events use TsMs (relative to session start).\nLatency events use Stage + Ms instead.",
+          "description": "gyro, light and visibility events: milliseconds since the session started",
           "type": "integer"
         },
         "x": {
-          "description": "Gyro fields (KindGyro).",
+          "description": "gyro events: device acceleration along x, in g, gravity included",
           "type": "number"
         },
         "y": {
+          "description": "gyro events: device acceleration along y, in g, gravity included",
           "type": "number"
         },
         "z": {
+          "description": "gyro events: device acceleration along z, in g, gravity included",
           "type": "number"
         }
       }
@@ -5152,6 +5290,19 @@
         }
       }
     },
+    "internal_api_handlers_oauth.ErrorResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "description": "OAuth error code, such as invalid_request, invalid_client or invalid_grant",
+          "type": "string"
+        },
+        "error_description": {
+          "description": "a readable explanation",
+          "type": "string"
+        }
+      }
+    },
     "internal_api_handlers_verify.ActionResultRequest": {
       "type": "object",
       "properties": {
@@ -5250,15 +5401,15 @@
       "type": "object",
       "properties": {
         "expires_in": {
-          "description": "ExpiresIn is the remaining lifetime of the key in seconds. Widget can\nuse this to decide when to request a fresh key (most flows complete\nwell within the TTL so re-fetch is rare).",
+          "description": "seconds until the key expires; request a new one after that",
           "type": "integer"
         },
         "key": {
-          "description": "Key is the HMAC key encoded as base64url (unpadded). Widget should\nbase64url-decode to raw bytes before passing to WebCrypto importKey.",
+          "description": "the HMAC key, base64url without padding; decode it to raw bytes before importing it (for example with WebCrypto importKey)",
           "type": "string"
         },
         "torch_schedule": {
-          "description": "TorchSchedule is the random torch on/off pattern the widget must\nfollow while recording the optical capture. Added 2026-09-09 as the\ndefence against a replayed recording: the frame-level forensic checks\nall pass on a video of a genuine card, because it IS a genuine card.\nA light pattern the server picks after the session starts cannot be\nin a recording made before it. Stable for the life of the session,\nlike the key, so a widget that re-fetches mid-flow does not change\nthe pattern it is halfway through following.\n\nOptional in the response so an older widget build simply ignores it.",
+          "description": "the torch on/off pattern to follow while recording the optical capture; the same for the whole session",
           "allOf": [
             {
               "$ref": "#/definitions/github_com_xident-io_api_pkg_optical.TorchSchedule"
@@ -5294,7 +5445,7 @@
           "type": "string"
         },
         "status": {
-          "description": "The validator tag is a THIRD copy of this vocabulary \u2014 after the Go\nconstants and the SQL \u2014 and the only one no compiler or query checks. It\nstill said \"completed\" after the rename, so every client PATCH with the\nnew value was rejected as a validation error before reaching any handler\nlogic. TestSessionStatusValidatorMatchesTheConstants guards it.",
+          "description": "success, failed or canceled",
           "type": "string",
           "enum": [
             "success",
@@ -5344,7 +5495,7 @@
       "type": "object",
       "properties": {
         "api_key": {
-          "description": "APIKey is the publishable key for the rest of the phone's calls. It is\nreleased only in exchange for a single-use token, over TLS \u2014 never encoded\ninto the QR image the way it used to be.",
+          "description": "the publishable key the phone uses for the rest of its calls",
           "type": "string"
         },
         "country_code": {
@@ -5360,7 +5511,7 @@
           "type": "string"
         },
         "methods": {
-          "description": "Verification context (mirrors what /requirements/check would have returned\nfor this session, read back from the session row itself)."
+          "description": "the session's verification context, as GET /verify/v1/requirements/check returns it"
         },
         "min_age": {
           "type": "integer"
@@ -5449,15 +5600,15 @@
       ],
       "properties": {
         "pitch": {
-          "description": "required on every sample: degrees; positive = looking up",
+          "description": "required on every sample: head pitch in Xident widget units, not degrees; positive = looking up",
           "type": "number"
         },
         "t": {
-          "description": "required on every sample: milliseconds since the first sample, a non-negative integer, never decreasing; a sample with the same t as the one before must have the same yaw and pitch",
+          "description": "required on every sample: milliseconds, a non-negative integer that never decreases; any start value is accepted",
           "type": "integer"
         },
         "yaw": {
-          "description": "required on every sample: degrees; positive = head turned to the person's own right (also the right side of the mirrored selfie preview)",
+          "description": "required on every sample: head yaw in Xident widget units (about -50 to +50), not degrees; positive = the person's own right",
           "type": "number"
         }
       }
@@ -5469,7 +5620,7 @@
       ],
       "properties": {
         "content_type": {
-          "description": "ContentType is required for document_video (video/webm or video/mp4)\nand ignored for every photo slot.",
+          "description": "required for document_video (video/webm or video/mp4); ignored for photos",
           "type": "string"
         },
         "type": {
@@ -5485,7 +5636,7 @@
       ],
       "properties": {
         "capture_proof_token": {
-          "description": "optional: set by the Xident verification widget, a signed proof that the document image came from its camera capture; when the server requires a proof, a request without one is refused",
+          "description": "send the proof token from the capture step (the Xident widget sets it)",
           "type": "string"
         },
         "document_type": {
@@ -5564,7 +5715,7 @@
           ]
         },
         "pose_trajectory": {
-          "description": "Required; the only movement evidence: 20 to 2000 samples, every sample with t (a non-negative integer, never decreasing), yaw and pitch; two samples with the same t must have the same yaw and pitch; at least 20 distinct times; last t minus first t from 1500 to 300000 ms",
+          "description": "required: 20 to 2000 head pose samples, the only movement evidence; the rules and units are in the description of POST /verify/v1/liveness/verify",
           "type": "array",
           "maxItems": 2000,
           "minItems": 20,
@@ -5581,14 +5732,14 @@
       "type": "object",
       "properties": {
         "capture_proof_token": {
-          "description": "Wave 1.2: capture-proof HMAC token. Widget sends here in addition to\nthe presign call so the worker can verify without needing a database\nround-trip to persist/retrieve the token.",
+          "description": "send the proof token from the capture step (the Xident widget sets it)",
           "type": "string"
         },
         "document_type": {
           "type": "string"
         },
         "document_video_guide": {
-          "description": "DocumentVideoGuide is where the card sat in the tilt video's frame, as\nfractions of the frame. Optional; validated to the unit square.",
+          "description": "optional: where the document sat in the document video's frame, as fractions of the frame width and height (0 to 1)",
           "allOf": [
             {
               "$ref": "#/definitions/github_com_xident-io_api_internal_domain_models.VideoGuide"
@@ -5631,7 +5782,7 @@
       ],
       "properties": {
         "email": {
-          "description": "Email is deliberately NOT tagged `email` here, only `required`.\nLogin is a lookup, not a creation gate: any address already in the\naccounts table must stay able to sign in. go-playground's `email` rule\nis stricter than the address syntax this API has historically accepted\n(see isValidEmail below), so tagging it would lock existing users out of\ntheir own accounts. Format is enforced where it belongs \u2014 registration.",
+          "description": "the address the account was registered with",
           "type": "string"
         },
         "min_age": {
@@ -5721,7 +5872,7 @@
       ],
       "properties": {
         "session_id": {
-          "description": "SessionID is the session's `xtk_` token, the same value the widget uses\neverywhere else. Named session_id to match /accounts/register.",
+          "description": "the session's xtk_ token",
           "type": "string"
         }
       }
@@ -5730,7 +5881,7 @@
       "type": "object",
       "properties": {
         "bracket": {
-          "description": "Bracket is the age bracket the account had already proven, echoed so the\nwidget can show what satisfied the gate without a second call.",
+          "description": "the age bracket the account had already proven",
           "type": "integer"
         },
         "status": {
@@ -5845,7 +5996,7 @@
           "type": "string"
         },
         "expected": {
-          "description": "Expected is the identity data the site owner already holds about the\nuser (data match). The worker compares it with the presented document\nand the result reports match / mismatch / not_on_document per field;\nthe values never come back. Requires a document: purpose\nid_verification or verification_mode document.",
+          "description": "the identity data you already hold about the user; Xident compares it with the document and reports match, mismatch or not_on_document per field, and the values never come back; needs a document (purpose id_verification or verification_mode document)",
           "allOf": [
             {
               "$ref": "#/definitions/github_com_xident-io_api_pkg_datamatch.Expected"
@@ -5865,7 +6016,7 @@
           "type": "integer"
         },
         "mismatch_policy": {
-          "description": "MismatchPolicy: \"report\" (default) records the outcome only; \"review\"\nsends the session to the tenant's review queue on any mismatch.",
+          "description": "\"report\" (default) records the outcome only; \"review\" sends the session to your review queue on any mismatch",
           "type": "string"
         },
         "purpose": {
@@ -5882,7 +6033,7 @@
           "type": "string"
         },
         "verification_mode": {
-          "description": "VerificationMode overrides the rule engine's method choice for THIS\nsession: \"auto\" (default), \"document\" (mandatory ID + face match, no\non-device estimation), or \"facial\" (on-device only, never a document).\n\nIt composes with MinAge rather than replacing it, which is the difference\nfrom Purpose: `purpose: \"id_verification\"` also forces a document but\nzeroes the age threshold, so \"show me ID AND require 21\" was previously\ninexpressible.",
+          "description": "\"auto\" (default), \"document\" (an ID document and a face match are always required, no on-device age estimation) or \"facial\" (on-device only, never a document); unlike purpose id_verification, it keeps min_age",
           "type": "string"
         }
       }
@@ -6062,7 +6213,7 @@
           "type": "string"
         },
         "outcome": {
-          "description": "Outcome is what the widget showed the user at the end. It is only ever\n\"success\" or \"failed\": the widget collapses every non-pass ending into\n\"failed\" before submitting (App.tsx), so a cancel never reaches here.",
+          "description": "what the widget showed at the end: success or failed",
           "type": "string"
         },
         "rating": {
