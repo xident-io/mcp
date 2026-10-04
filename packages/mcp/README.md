@@ -25,6 +25,17 @@ currently in flight.
 Tools a token's scopes do not cover are **not advertised**, so an agent never
 sees a tool it cannot use.
 
+### Reading a result and deciding access
+
+`xident_get_verification_result` returns Xident's verdict verbatim. `verified`
+alone is not a grant: pass `expected_user_id` (the user your backend started
+the verification for) and `required_min_age` (your own setting, 12 to 25) and
+the tool adds `access` with `proves_age` (verified, not a test-key verdict,
+`checks.age.gate` present and at least `required_min_age`; `checks.age.passed`
+is not read, because it is false on a Xident ID reuse and an EU wallet pass),
+`same_user` (`external_user_id` matches), `test` and `granted`. This server has
+no opt-in for test-key verdicts: they never grant.
+
 ### Starting a verification
 
 `xident_start_verification` needs `callback_url`, `user_id` (your own

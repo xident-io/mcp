@@ -10,6 +10,14 @@
           "type": "string",
           "minLength": 1,
           "description": "The verification token, e.g. xtk_..."
+        },
+        "expected_user_id": {
+          "description": "Optional, with required_min_age: the user your backend started this verification for. The tool then adds `access` with proves_age, same_user, test and granted.",
+          "type": "string"
+        },
+        "required_min_age": {
+          "description": "Optional, with expected_user_id: the minimum age your backend requires, a whole number from 12 to 25.",
+          "type": "number"
         }
       },
       "required": [

@@ -52,6 +52,12 @@ Returns the frozen v1 result inside `data`. The shape is additive-only: new
 optional fields may appear, existing fields never change meaning. Write your
 parser to ignore unknown fields.
 
+Grant access only after the checks in SKILL.md (Step 3, "Deciding access"):
+`verified`, `external_user_id` equal to your own user, `checks.age.gate`
+present and at least your own required age (an `id_verification` result has
+no gate), and `test` not `true`. Do not require `checks.age.passed`: it is
+false on a Xident ID reuse and an EU wallet pass.
+
 ## GET /verify/v1/status/{token}
 
 The **subject-facing** view — less detail, masked failure reason. This is what

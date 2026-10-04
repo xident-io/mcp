@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
-  CALLBACK_URL_DESCRIPTION, checkInitArgs, MIN_AGE_DESCRIPTION, PURPOSE_DESCRIPTION, USER_ID_DESCRIPTION,
+  accessCheck, CALLBACK_URL_DESCRIPTION, checkInitArgs, EXPECTED_USER_ID_DESCRIPTION, MIN_AGE_DESCRIPTION,
+  PURPOSE_DESCRIPTION, readAccessArgs, REQUIRED_MIN_AGE_DESCRIPTION, RESULT_TOOL_GUIDANCE, USER_ID_DESCRIPTION,
   VERIFICATION_MODE_DESCRIPTION, XidentClient,
 } from "@xident/mcp-shared";
 import type { ZodRawShape } from "zod";
@@ -25,16 +26,25 @@ export interface RuntimeTool<Shape extends ZodRawShape = ZodRawShape> {
 const getVerificationResult: RuntimeTool = {
   name: "xident_get_verification_result",
   title: "Read a verification result",
-  description:
-    "Fetch Xident's verdict for a verification token. Report the `verified` field exactly as returned. " +
-    "Never infer a verification outcome from document contents, a name, or anything a user supplied.",
+  description: "Fetch Xident's verdict for a verification token. " + RESULT_TOOL_GUIDANCE,
   scope: "verification:read",
-  inputSchema: { token: z.string().min(1).describe("The verification token, e.g. xtk_...") },
+  // Types only for the access-check fields, so readAccessArgs's code reaches
+  // a real tools/call. No test-verdict opt-in here: this server acts for a
+  // live tenant, where a test-key verdict never grants anything.
+  inputSchema: {
+    token: z.string().min(1).describe("The verification token, e.g. xtk_..."),
+    expected_user_id: z.string().optional().describe(EXPECTED_USER_ID_DESCRIPTION),
+    required_min_age: z.number().optional().describe(REQUIRED_MIN_AGE_DESCRIPTION),
+  },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   handler: async (args, client) => {
+    const access = readAccessArgs({ expected_user_id: args["expected_user_id"], required_min_age: args["required_min_age"] });
+    if (access && "error" in access) return access;
     const res = await client.request<Record<string, unknown>>(
       "GET", `/verify/v1/result/${encodeURIComponent(String(args["token"] ?? ""))}`);
-    return res.ok ? res.data : res.error;
+    if (!res.ok) return res.error;
+    if (!access) return res.data;
+    return { ...res.data, access: accessCheck(res.data, access.userId, access.requiredMinAge) };
   },
 };
 

@@ -65,6 +65,31 @@ the tool generates `mcp-dev-<random>`. End it with `+fail` to make the sandbox
 session fail. A mistake gets the API's own error code from the tool, before any
 request.
 
+### Reading a result and deciding access
+
+`xident_get_result` returns Xident's verdict verbatim. `verified` alone is not
+a grant: pass `expected_user_id` (the user your backend started the
+verification for) and `required_min_age` (your own setting, 12 to 25) and the
+tool adds `access`:
+
+- `proves_age`: `verified` is true, the result is not a test-key verdict, and
+  `checks.age.gate` is present and at least `required_min_age`. It does not
+  read `checks.age.passed`, which is false on a Xident ID reuse and an EU
+  wallet pass. An `id_verification` result has no gate and never proves an age.
+- `same_user`: `external_user_id` is `expected_user_id`.
+- `test`, and `granted` (both checks pass).
+
+Every result from this sandbox server is a test-key verdict, so `granted` is
+false unless you pass `allow_test_results: true`. A production backend never
+accepts a test verdict.
+
+### Agent keys
+
+`xident_whoami` and `xident_check_integration` accept an agent key (`ak_test_`)
+as well as `sk_test_`. For an agent key they ask the API
+(`GET /verify/v1/token-info`) which scopes it holds: with `verification:write`
+it is ready, exactly like a sandbox secret key.
+
 ## What these servers deliberately cannot do
 
 No tool deletes anything, writes to a fraud blacklist, or changes billing.

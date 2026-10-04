@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -141,5 +144,48 @@ describe("xident_start_verification through tools/call", () => {
     } finally {
       await client.close();
     }
+  });
+});
+
+/** The API's result shapes, shared with packages/shared (see result.test.ts for their sources). */
+const fixture = (name: string): Json =>
+  JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "shared", "src", "__fixtures__", name), "utf8")) as Json;
+
+async function callResult(args: Json, f: ReturnType<typeof vi.fn>): Promise<Json> {
+  vi.stubGlobal("fetch", f);
+  const client = await connect(createRuntimeServer(cfg, "xat_test_token", ["verification:read"]));
+  try {
+    const res = await client.callTool({ name: "xident_get_verification_result", arguments: args });
+    return JSON.parse((res.content as Array<{ text: string }>)[0]!.text) as Json;
+  } finally {
+    await client.close();
+  }
+}
+
+describe("xident_get_verification_result access check through tools/call", () => {
+  const api = (result: Json) => vi.fn(async () => jsonRes(200, { success: true, data: result }));
+  const ask = { token: "xtk_1", expected_user_id: "cust-4711", required_min_age: 21 };
+
+  it("returns the verdict verbatim when no check is asked", async () => {
+    const doc = fixture("tenant_result_v1.golden.json");
+    expect(await callResult({ token: "xtk_1" }, api(doc))).toEqual(doc);
+  });
+
+  it("decides on the five result shapes, and never accepts a test verdict here", async () => {
+    const decide = async (name: string) => (await callResult(ask, api(fixture(name))))["access"];
+    expect(await decide("tenant_result_v1.golden.json")).toMatchObject({ proves_age: true, same_user: true, granted: true });
+    expect(await decide("tenant_result_xident_id_reuse.json")).toMatchObject({ granted: true });
+    expect(await decide("tenant_result_eu_wallet.json")).toMatchObject({ granted: true });
+    expect(await decide("tenant_result_id_no_gate.json")).toMatchObject({ proves_age: false, granted: false });
+    expect(await decide("tenant_result_test_mode.json")).toMatchObject({ test: true, granted: false });
+    // The runtime tool has no opt-in: an extra argument does not turn one on.
+    const test = await callResult({ ...ask, allow_test_results: true }, api(fixture("tenant_result_test_mode.json")));
+    expect(test["access"]).toMatchObject({ granted: false });
+  });
+
+  it("refuses half an access check with INVALID_ACCESS_CHECK and sends nothing", async () => {
+    const f = api({});
+    expect(await callResult({ token: "xtk_1", required_min_age: 21 }, f)).toMatchObject({ code: "INVALID_ACCESS_CHECK" });
+    expect(f).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,20 @@ function sandboxCtx(fetchImpl: typeof fetch): DevContext {
 function liveCtx(fetchImpl: typeof fetch): DevContext {
   return contextFromEnv({ XIDENT_API_KEY: "sk_live_abc", XIDENT_BASE_URL: "https://api.test" }, fetchImpl);
 }
+function agentCtx(fetchImpl: typeof fetch, key = "ak_test_abc"): DevContext {
+  return contextFromEnv({ XIDENT_API_KEY: key, XIDENT_BASE_URL: "https://api.test" }, fetchImpl);
+}
+/** A fake API that answers GET /verify/v1/token-info with these scopes, and [] elsewhere. */
+function tokenInfoApi(info: { scopes: string[]; unrestricted?: boolean } | number) {
+  return vi.fn(async (url: string) => {
+    if (String(url).endsWith("/verify/v1/token-info")) {
+      return typeof info === "number"
+        ? json(info, { success: false, error: { code: "UNAUTHORIZED", message: "invalid key" } })
+        : json(200, { success: true, data: { key_kind: "agent", unrestricted: false, ...info } });
+    }
+    return json(200, { data: [] });
+  });
+}
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
@@ -85,6 +99,39 @@ describe("xident_whoami", () => {
   it("errors cleanly with no key configured", async () => {
     const out = await whoamiTool.handler({}, contextFromEnv({})) as Json;
     expect(out["code"]).toBe("NO_API_KEY");
+  });
+
+  it("reports a sandbox agent key with verification:write as ready, after asking the API", async () => {
+    const fetchImpl = tokenInfoApi({ scopes: ["verification:read", "verification:write"] });
+    const out = await whoamiTool.handler({}, agentCtx(fetchImpl as never)) as Json;
+    expect(String(fetchImpl.mock.calls[0]![0])).toBe("https://api.test/verify/v1/token-info");
+    expect(out["key_kind"]).toBe("agent");
+    expect(out["scopes"]).toEqual(["verification:read", "verification:write"]);
+    expect(out["ready_for_test_verifications"]).toBe(true);
+    expect(out["problems"]).toEqual([]);
+  });
+
+  it("reports an unrestricted sandbox agent key as ready", async () => {
+    const out = await whoamiTool.handler({}, agentCtx(tokenInfoApi({ scopes: [], unrestricted: true }) as never)) as Json;
+    expect(out["ready_for_test_verifications"]).toBe(true);
+  });
+
+  it("says why a sandbox agent key without verification:write is not ready", async () => {
+    const out = await whoamiTool.handler({}, agentCtx(tokenInfoApi({ scopes: ["verification:read"] }) as never)) as Json;
+    expect(out["ready_for_test_verifications"]).toBe(false);
+    expect((out["problems"] as string[]).join(" ")).toContain("without verification:write");
+  });
+
+  it("is not ready when the API cannot say what the agent key may do", async () => {
+    const out = await whoamiTool.handler({}, agentCtx(tokenInfoApi(401) as never)) as Json;
+    expect(out["ready_for_test_verifications"]).toBe(false);
+    expect((out["problems"] as string[]).join(" ")).toContain("Could not read the agent key's scopes");
+  });
+
+  it("never reports a live agent key as ready, even with verification:write", async () => {
+    const fetchImpl = tokenInfoApi({ scopes: ["verification:write"] });
+    const out = await whoamiTool.handler({}, agentCtx(fetchImpl as never, "ak_live_abc")) as Json;
+    expect(out["ready_for_test_verifications"]).toBe(false);
   });
 });
 
@@ -328,5 +375,29 @@ describe("xident_check_integration", () => {
     const fetchImpl = vi.fn(async () => json(200, []));
     const out = await checkIntegrationTool.handler({}, sandboxCtx(fetchImpl as never)) as Json;
     expect(out["all_passed"]).toBe(true);
+  });
+
+  it("passes everything for a sandbox agent key with verification:write", async () => {
+    const out = await checkIntegrationTool.handler({}, agentCtx(tokenInfoApi({ scopes: ["verification:write"] }) as never)) as Json;
+    const keyType = (out["checks"] as Array<{ check: string; passed: boolean; detail: string }>).find((c) => c.check === "key_type")!;
+    expect(keyType.passed).toBe(true);
+    expect(keyType.detail).toContain("Agent key (ak_) with verification:write");
+    expect(out["all_passed"]).toBe(true);
+  });
+
+  it("fails the key check for an agent key without verification:write, and does not ask for an sk_ key", async () => {
+    const out = await checkIntegrationTool.handler({}, agentCtx(tokenInfoApi({ scopes: ["verification:read"] }) as never)) as Json;
+    const keyType = (out["checks"] as Array<{ check: string; passed: boolean; detail: string }>).find((c) => c.check === "key_type")!;
+    expect(keyType.passed).toBe(false);
+    expect(keyType.detail).toContain("without verification:write");
+    expect(keyType.detail).not.toContain("require a secret key");
+    expect(out["all_passed"]).toBe(false);
+  });
+
+  it("fails the key check for a public key", async () => {
+    const fetchImpl = vi.fn(async () => json(200, []));
+    const ctx = contextFromEnv({ XIDENT_API_KEY: "pk_test_abc", XIDENT_BASE_URL: "https://api.test" }, fetchImpl as never);
+    const out = await checkIntegrationTool.handler({}, ctx) as Json;
+    expect((out["checks"] as Array<{ check: string; passed: boolean }>).find((c) => c.check === "key_type")!.passed).toBe(false);
   });
 });

@@ -45,6 +45,10 @@ const GUIDANCE: Record<string, { fix: string; retryable: boolean }> = {
     fix: "For age_verification send min_age as a whole number from 12 to 25 (it is rounded up to the next of 12, 15, 18, 21 or 25). For id_verification leave min_age out, or send 0.",
     retryable: false,
   },
+  INVALID_ACCESS_CHECK: {
+    fix: "Send expected_user_id (the user your backend started the verification for) and required_min_age (a whole number from 12 to 25) together, or leave both out.",
+    retryable: false,
+  },
   INVALID_VERIFICATION_MODE: {
     fix: "Use auto, document or facial. An id_verification cannot use facial: leave verification_mode out, or send document.",
     retryable: false,

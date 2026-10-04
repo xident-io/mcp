@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -97,5 +100,49 @@ describe("xident_start_test_verification through tools/call", () => {
     const { payload } = await start({ min_age: 99 }, f, "sk_live_abc");
     expect(payload["code"]).toBe("LIVE_KEY_REFUSED");
     expect(f).not.toHaveBeenCalled();
+  });
+});
+
+/** The API's result shapes, shared with packages/shared (see result.test.ts for their sources). */
+const fixture = (name: string): Json =>
+  JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "shared", "src", "__fixtures__", name), "utf8")) as Json;
+
+describe("xident_get_result access check through tools/call", () => {
+  const getResult = (args: Json, f: ReturnType<typeof vi.fn>) => call("xident_get_result", args, "sk_test_abc", f);
+  const api = (result: Json) => vi.fn(async () => json(200, { success: true, data: result }));
+
+  it("returns the verdict verbatim, with no access object, when no check is asked", async () => {
+    const doc = fixture("tenant_result_v1.golden.json");
+    const { payload } = await getResult({ token: "xtk_1" }, api(doc));
+    expect(payload).toEqual(doc);
+  });
+
+  it("adds the backend's decision for the document, reuse, wallet, ID-only and test shapes", async () => {
+    const ask = { token: "xtk_1", expected_user_id: "cust-4711", required_min_age: 21 };
+    const decide = async (name: string, extra: Json = {}) =>
+      (await getResult({ ...ask, ...extra }, api(fixture(name)))).payload["access"];
+
+    expect(await decide("tenant_result_v1.golden.json")).toEqual({ proves_age: true, same_user: true, test: false, granted: true });
+    expect(await decide("tenant_result_xident_id_reuse.json")).toMatchObject({ proves_age: true, granted: true });
+    expect(await decide("tenant_result_eu_wallet.json")).toMatchObject({ proves_age: true, granted: true });
+    expect(await decide("tenant_result_id_no_gate.json")).toMatchObject({ proves_age: false, granted: false });
+    expect(await decide("tenant_result_test_mode.json")).toEqual({ proves_age: false, same_user: true, test: true, granted: false });
+    expect(await decide("tenant_result_test_mode.json", { allow_test_results: true })).toMatchObject({ proves_age: true, granted: true });
+    expect(await decide("tenant_result_v1.golden.json", { required_min_age: 25 })).toMatchObject({ proves_age: false, granted: false });
+    expect(await decide("tenant_result_v1.golden.json", { expected_user_id: "someone-else" })).toMatchObject({ same_user: false, granted: false });
+  });
+
+  it("refuses half an access check with INVALID_ACCESS_CHECK and sends nothing", async () => {
+    for (const args of [
+      { token: "xtk_1", expected_user_id: "cust-4711" },
+      { token: "xtk_1", required_min_age: 21 },
+      { token: "xtk_1", expected_user_id: "cust-4711", required_min_age: 30 },
+    ]) {
+      const f = api({});
+      const { payload, isError } = await getResult(args, f);
+      expect(isError).toBe(false);
+      expect(payload, JSON.stringify(args)).toMatchObject({ error: true, status: 400, code: "INVALID_ACCESS_CHECK" });
+      expect(f).not.toHaveBeenCalled();
+    }
   });
 });

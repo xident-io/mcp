@@ -4,3 +4,4 @@ export * from "./errors.js";
 export * from "./reasons.js";
 export * from "./client.js";
 export * from "./init-args.js";
+export * from "./result.js";
