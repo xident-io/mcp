@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  checkInitArgs, ID_VERIFICATION_FACIAL_MESSAGE, INVALID_MIN_AGE_MESSAGE, MISSING_USER_ID_MESSAGE,
+  checkInitArgs, ID_VERIFICATION_FACIAL_MESSAGE, INVALID_MIN_AGE_MESSAGE, INVALID_PURPOSE_MESSAGE,
+  INVALID_VERIFICATION_MODE_MESSAGE, MISSING_USER_ID_MESSAGE,
 } from "./init-args.js";
 
 const base = { callback_url: "https://example.com/done", user_id: "u-1" };
@@ -84,13 +85,50 @@ describe("checkInitArgs", () => {
     expect(checkInitArgs({ ...base, min_age: 18, verification_mode: "facial" })).toBeNull();
   });
 
+  it.each([["manual"], ["Document"], ["documents"]])("refuses the unknown verification_mode %s", (mode) => {
+    // Fails if an unknown mode is let through: the tools' schemas no longer
+    // carry the enum, so this check is the only place it is refused.
+    const out = checkInitArgs({ ...base, min_age: 18, verification_mode: mode });
+    expect(out).toMatchObject({ status: 400, code: "INVALID_VERIFICATION_MODE" });
+    expect(out!.message).toBe(INVALID_VERIFICATION_MODE_MESSAGE);
+  });
+
+  it("accepts every known verification_mode, and an empty one as not sent", () => {
+    for (const mode of ["auto", "document", "facial", ""]) {
+      expect(checkInitArgs({ ...base, min_age: 18, verification_mode: mode }), mode).toBeNull();
+    }
+  });
+
+  it.each([["kyc"], ["age"], ["ID_VERIFICATION"]])("refuses the unknown purpose %s", (purpose) => {
+    // Fails if an unknown purpose is read as an age verification.
+    const out = checkInitArgs({ ...base, min_age: 18, purpose });
+    expect(out).toMatchObject({ status: 400, code: "INVALID_PURPOSE" });
+    expect(out!.message).toBe(INVALID_PURPOSE_MESSAGE);
+  });
+
+  it("reads an empty purpose as an age verification, as the API does", () => {
+    expect(checkInitArgs({ ...base, purpose: "", min_age: 18 })).toBeNull();
+    expect(checkInitArgs({ ...base, purpose: "" })!.code).toBe("INVALID_MIN_AGE");
+  });
+
+  it("gives the code the API gives first when two settings are wrong", () => {
+    // The API checks purpose, then the age, then the mode (init.go).
+    expect(checkInitArgs({ ...base, purpose: "kyc", min_age: 99 })!.code).toBe("INVALID_PURPOSE");
+    expect(checkInitArgs({ ...base, min_age: 99, verification_mode: "manual" })!.code).toBe("INVALID_MIN_AGE");
+    expect(checkInitArgs({ ...base, purpose: "id_verification", min_age: 18, verification_mode: "facial" })!.code)
+      .toBe("INVALID_MIN_AGE");
+    expect(checkInitArgs({ ...base, purpose: "id_verification", verification_mode: "manual" })!.message)
+      .toBe(INVALID_VERIFICATION_MODE_MESSAGE);
+  });
+
   it("gives every refusal a remedy an agent can act on", () => {
-    for (const code of ["MISSING_USER_ID", "INVALID_MIN_AGE", "INVALID_VERIFICATION_MODE", "MISSING_CALLBACK_URL"]) {
+    for (const code of ["MISSING_USER_ID", "INVALID_MIN_AGE", "INVALID_VERIFICATION_MODE", "MISSING_CALLBACK_URL", "INVALID_PURPOSE"]) {
       const args: Record<string, unknown> =
         code === "MISSING_USER_ID" ? { callback_url: base.callback_url, min_age: 18 }
           : code === "INVALID_MIN_AGE" ? { ...base, min_age: 30 }
             : code === "INVALID_VERIFICATION_MODE" ? { ...base, purpose: "id_verification", verification_mode: "facial" }
-              : { user_id: "u-1", min_age: 18 };
+              : code === "INVALID_PURPOSE" ? { ...base, purpose: "kyc", min_age: 18 }
+                : { user_id: "u-1", min_age: 18 };
       const out = checkInitArgs(args)!;
       expect(out.code).toBe(code);
       // The default 400 text is generic; each code has its own remedy.

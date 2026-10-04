@@ -25,7 +25,7 @@ a non-retryable failure and check the changelog.
 | Status | Code | Meaning | Remedy |
 |---|---|---|---|
 | 400 | `MISSING_USER_ID` | init sent no `user_id` | Send your own identifier for the person |
-| 400 | `INVALID_MIN_AGE` | `min_age` outside 12 to 25, or set on an `id_verification` | Send 12 to 25 for `age_verification`; leave it out for `id_verification` |
+| 400 | `INVALID_MIN_AGE` | `min_age` outside 12 to 25, or a non-zero value on an `id_verification` | Send 12 to 25 for `age_verification`; leave it out (or send 0) for `id_verification` |
 | 400 | `INVALID_VERIFICATION_MODE` | Unknown mode, or `facial` with `id_verification` | Use `auto` or `document` for an ID verification |
 | 401 | — | Missing, malformed, or revoked key | Check the credential |
 | 403 | `SECRET_KEY_REQUIRED` | init called with a public key (`pk_`) | Call init from your server with a server key (`sk_` or `ak_`) |

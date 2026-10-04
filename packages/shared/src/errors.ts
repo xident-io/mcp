@@ -37,8 +37,12 @@ const GUIDANCE: Record<string, { fix: string; retryable: boolean }> = {
     fix: "Send user_id: your own identifier for the person being verified. It comes back on the callback and in the result.",
     retryable: false,
   },
+  INVALID_PURPOSE: {
+    fix: "Send purpose as age_verification (the default) or id_verification, or leave it out.",
+    retryable: false,
+  },
   INVALID_MIN_AGE: {
-    fix: "For age_verification send min_age as a whole number from 12 to 25 (it is rounded up to the next of 12, 15, 18, 21 or 25). For id_verification leave min_age out.",
+    fix: "For age_verification send min_age as a whole number from 12 to 25 (it is rounded up to the next of 12, 15, 18, 21 or 25). For id_verification leave min_age out, or send 0.",
     retryable: false,
   },
   INVALID_VERIFICATION_MODE: {

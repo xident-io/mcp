@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import {
-  checkInitArgs, explainReason, keyKind, MIN_AGE_CEILING, MIN_AGE_DESCRIPTION, MIN_AGE_FLOOR,
+  CALLBACK_URL_DESCRIPTION, checkInitArgs, explainReason, keyKind, MIN_AGE_DESCRIPTION,
   PURPOSE_DESCRIPTION, VERIFICATION_MODE_DESCRIPTION,
 } from "@xident/mcp-shared";
 import { fail, ok, requireClient, type ToolDef } from "./types.js";
@@ -74,13 +74,15 @@ export const startTestVerificationTool: ToolDef = {
   description:
     "Create a sandbox verification session and return a verify_url to open in a browser. " +
     "Sandbox keys only. Use this to see the real flow end to end while building an integration.",
+  // Types only for the settings fields, as in the runtime tool: a strict
+  // schema would make the MCP SDK refuse with its own text before the handler
+  // could return the API's code. checkInitArgs applies the rules.
   inputSchema: {
-    min_age: z.number().int().min(MIN_AGE_FLOOR).max(MIN_AGE_CEILING).optional().describe(MIN_AGE_DESCRIPTION),
-    purpose: z.enum(["age_verification", "id_verification"]).optional().describe(PURPOSE_DESCRIPTION),
-    verification_mode: z.enum(["auto", "document", "facial"]).optional().describe(VERIFICATION_MODE_DESCRIPTION),
-    callback_url: z.string().url().describe(
-      "REQUIRED. Where the widget returns the user: HTTPS, or http://localhost in development"),
-    user_id: z.string().min(1).optional().describe(
+    min_age: z.number().optional().describe(MIN_AGE_DESCRIPTION),
+    purpose: z.string().optional().describe(PURPOSE_DESCRIPTION),
+    verification_mode: z.string().optional().describe(VERIFICATION_MODE_DESCRIPTION),
+    callback_url: z.string().optional().describe(CALLBACK_URL_DESCRIPTION),
+    user_id: z.string().optional().describe(
       "Your identifier for the test person. It comes back on the callback and in the result. Leave it out " +
       "and the tool generates mcp-dev-<random>. End it with +fail to make the test session fail."),
     locale: z.string().optional().describe("BCP-47 locale, e.g. de-DE"),

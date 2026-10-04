@@ -167,14 +167,42 @@ describe("xident_start_test_verification", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it("publishes callback_url as required and ages as 12 to 25", () => {
+  it("publishes the settings fields with types only, so the handler sees every value", () => {
+    // A strict schema made the MCP SDK refuse with its own text before the
+    // handler ran (Astra finding 3), and refused the min_age 0 an ID
+    // verification may send (finding 2). The rules live in checkInitArgs.
     const schema = z.object(startTestVerificationTool.inputSchema);
-    expect(startTestVerificationTool.inputSchema["callback_url"]!.isOptional()).toBe(false);
-    expect(schema.safeParse({ min_age: 18 }).success).toBe(false);
-    for (const [age, accepted] of [[11, false], [12, true], [25, true], [26, false], [0, false], [120, false]] as const) {
-      expect(schema.safeParse({ callback_url: cb, min_age: age }).success).toBe(accepted);
+    for (const field of ["callback_url", "user_id", "min_age", "purpose", "verification_mode"]) {
+      expect(startTestVerificationTool.inputSchema[field]!.isOptional(), field).toBe(true);
     }
-    expect(schema.safeParse({ callback_url: cb, min_age: 18, user_id: "" }).success).toBe(false);
+    for (const age of [0, 11, 26, 120, 18.5]) {
+      expect(schema.safeParse({ callback_url: cb, min_age: age }).success, String(age)).toBe(true);
+    }
+    expect(schema.safeParse({ min_age: 18, verification_mode: "manual" }).success).toBe(true);
+    expect(startTestVerificationTool.inputSchema["callback_url"]!.description ?? "").toMatch(/^REQUIRED\./);
+  });
+
+  it("sends purpose, verification_mode, user_id and min_age to POST /verify/v1/init as given", async () => {
+    // Fails if any of them is dropped after the check (Astra finding 4).
+    const fetchImpl = vi.fn(async () => json(200, { token: "xit_1" }));
+    await startTestVerificationTool.handler(
+      { min_age: 21, purpose: "age_verification", verification_mode: "document", callback_url: cb, user_id: "u-9" },
+      sandboxCtx(fetchImpl as never));
+    expect(fetchImpl.mock.calls[0]![0]).toBe("https://api.test/verify/v1/init");
+    expect((fetchImpl.mock.calls[0]![1] as RequestInit).method).toBe("POST");
+    expect(JSON.parse(String((fetchImpl.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      min_age: 21, purpose: "age_verification", verification_mode: "document", callback_url: cb, user_id: "u-9",
+    });
+  });
+
+  it("sends an id verification with min_age 0, as the API accepts it", async () => {
+    const fetchImpl = vi.fn(async () => json(200, { token: "xit_2" }));
+    await startTestVerificationTool.handler(
+      { min_age: 0, purpose: "id_verification", verification_mode: "document", callback_url: cb, user_id: "u-9" },
+      sandboxCtx(fetchImpl as never));
+    expect(JSON.parse(String((fetchImpl.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      min_age: 0, purpose: "id_verification", verification_mode: "document", callback_url: cb, user_id: "u-9",
+    });
   });
 });
 

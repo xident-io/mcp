@@ -59,9 +59,11 @@ reason code.
 `xident_start_test_verification` needs `callback_url`. For `age_verification`
 (the default) it also needs `min_age`, a whole number from 12 to 25: Xident
 rounds it up to the next of 12, 15, 18, 21 or 25, so 19 is enforced as 21. An
-`id_verification` takes no `min_age` and cannot use `verification_mode: facial`.
-Every session needs a `user_id`: leave it out and the tool generates
-`mcp-dev-<random>`. End it with `+fail` to make the sandbox session fail.
+`id_verification` takes no `min_age` (leave it out or send 0) and cannot use
+`verification_mode: facial`. Every session needs a `user_id`: leave it out and
+the tool generates `mcp-dev-<random>`. End it with `+fail` to make the sandbox
+session fail. A mistake gets the API's own error code from the tool, before any
+request.
 
 ## What these servers deliberately cannot do
 
@@ -82,7 +84,10 @@ One planned exception: from the API release that makes every session setting
 server-only (xident-io/api#44), the start tools follow the API's init rules.
 `user_id` is required, `min_age` is 12 to 25, and the dev tool requires
 `callback_url`. The API refuses the old inputs from that release, so keeping
-them in the schema would only move the error to the API call.
+them would only move the error to the API call. The settings fields of the
+start tools' schemas carry their types only (no required list, bounds or
+enums): the tools check the rules themselves and answer with the API's error
+codes, which an MCP schema failure would hide.
 
 ## Development
 

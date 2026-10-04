@@ -20,7 +20,7 @@ Creates a verification session.
 |---|---|---|
 | `callback_url` | string | **Required.** Where the widget returns the user |
 | `user_id` | string | **Required.** Your own identifier for the person being verified. It comes back on the callback and in the result |
-| `min_age` | int | **Required for `age_verification`.** A whole number from 12 to 25, rounded up to the next of 12, 15, 18, 21 or 25 (19 is enforced as 21). `id_verification` takes none |
+| `min_age` | int | **Required for `age_verification`.** A whole number from 12 to 25, rounded up to the next of 12, 15, 18, 21 or 25 (19 is enforced as 21). `id_verification` takes none: leave it out or send 0 |
 | `purpose` | string | `age_verification` (default) or `id_verification` (a document and a face match, no age threshold) |
 | `verification_mode` | string | `auto` (default), `document` (forces ID + face match), `facial` (on-device only, never a document). `facial` cannot be combined with `id_verification` |
 | `success_url` / `failed_url` | string | Outcome-specific returns |

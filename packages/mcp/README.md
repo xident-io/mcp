@@ -31,9 +31,13 @@ sees a tool it cannot use.
 identifier for the person being verified) and `idempotency_key`. For
 `age_verification` (the default) it also needs `min_age`, a whole number from
 12 to 25: Xident rounds it up to the next of 12, 15, 18, 21 or 25, so 19 is
-enforced as 21. An `id_verification` takes no `min_age` and cannot use
-`verification_mode: facial`. The tool refuses these mistakes before calling the
-API, with the same error code the API would send.
+enforced as 21. An `id_verification` takes no `min_age` (leave it out or send
+0) and cannot use `verification_mode: facial`. The tool refuses these mistakes
+before calling the API, with the same error code the API would send
+(`MISSING_CALLBACK_URL`, `MISSING_USER_ID`, `INVALID_PURPOSE`,
+`INVALID_MIN_AGE`, `INVALID_VERIFICATION_MODE`). The input schema gives these
+fields their types only, so the tool, not the MCP schema check, answers a
+mistake, and the agent gets the API's code.
 
 ## What it cannot do, by design
 
@@ -71,8 +75,10 @@ test. A rename or a scope change fails the build.
 One planned exception: from the API release that makes every session setting
 server-only (xident-io/api#44), `xident_start_verification` follows the API's
 init rules: `user_id` is required and `min_age` is 12 to 25. The API refuses the
-old inputs from that release, so keeping them in the schema would only move the
-error to the API call.
+old inputs from that release, so keeping them would only move the error to the
+API call. The settings fields of the schema carry their types only (no required
+list, bounds or enums): the tool checks the rules itself and answers with the
+API's error codes.
 
 ## Licence
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  checkInitArgs, MIN_AGE_CEILING, MIN_AGE_DESCRIPTION, MIN_AGE_FLOOR, PURPOSE_DESCRIPTION,
+  CALLBACK_URL_DESCRIPTION, checkInitArgs, MIN_AGE_DESCRIPTION, PURPOSE_DESCRIPTION, USER_ID_DESCRIPTION,
   VERIFICATION_MODE_DESCRIPTION, XidentClient,
 } from "@xident/mcp-shared";
 import type { ZodRawShape } from "zod";
@@ -45,14 +45,18 @@ const startVerification: RuntimeTool = {
     "Create a verification session and return a URL for a person to complete. " +
     "The person must open the URL themselves; there is no way to verify someone without their participation.",
   scope: "verification:write",
+  // The settings fields carry types only: no required list, no bounds, no
+  // enums. The MCP SDK refuses a schema failure with its own text before the
+  // handler runs, so a strict schema would hide the API's codes
+  // (MISSING_USER_ID, INVALID_MIN_AGE, ...) from a real tools/call. The
+  // handler applies the API's rules (checkInitArgs) and the descriptions say
+  // which fields are required.
   inputSchema: {
-    min_age: z.number().int().min(MIN_AGE_FLOOR).max(MIN_AGE_CEILING).optional().describe(MIN_AGE_DESCRIPTION),
-    purpose: z.enum(["age_verification", "id_verification"]).optional().describe(PURPOSE_DESCRIPTION),
-    verification_mode: z.enum(["auto", "document", "facial"]).optional().describe(VERIFICATION_MODE_DESCRIPTION),
-    callback_url: z.string().url().describe("Where the person returns after the flow"),
-    user_id: z.string().min(1).describe(
-      "REQUIRED. Your own identifier for the person being verified. It comes back on the callback and in " +
-      "the result. Must not be a Xident key or token."),
+    min_age: z.number().optional().describe(MIN_AGE_DESCRIPTION),
+    purpose: z.string().optional().describe(PURPOSE_DESCRIPTION),
+    verification_mode: z.string().optional().describe(VERIFICATION_MODE_DESCRIPTION),
+    callback_url: z.string().optional().describe(CALLBACK_URL_DESCRIPTION),
+    user_id: z.string().optional().describe(USER_ID_DESCRIPTION),
     idempotency_key: z.string().min(1).describe(
       "REQUIRED. A stable key for this logical request. Retrying with the same key returns the same session " +
       "instead of creating a second one."),
