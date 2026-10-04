@@ -32,12 +32,13 @@
       "type": "object",
       "properties": {
         "min_age": {
-          "description": "Age gate, e.g. 18",
+          "description": "Required for age_verification: a whole number from 12 to 25. Xident rounds it up to the next of 12, 15, 18, 21 or 25 and enforces that band, so 19 is enforced as 21. Leave it out for id_verification.",
           "type": "integer",
-          "minimum": 1,
-          "maximum": 99
+          "minimum": 12,
+          "maximum": 25
         },
         "purpose": {
+          "description": "age_verification (default) or id_verification. An id_verification always needs a document and a face match, and takes no min_age.",
           "type": "string",
           "enum": [
             "age_verification",
@@ -45,6 +46,7 @@
           ]
         },
         "verification_mode": {
+          "description": "auto (default), document (an ID document and a face match are always required), or facial (on-device only, never a document). facial cannot be combined with purpose id_verification, which always needs a document.",
           "type": "string",
           "enum": [
             "auto",
@@ -58,8 +60,9 @@
           "description": "Where the person returns after the flow"
         },
         "user_id": {
-          "description": "Your identifier for the person, echoed back",
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "description": "REQUIRED. Your own identifier for the person being verified. It comes back on the callback and in the result. Must not be a Xident key or token."
         },
         "idempotency_key": {
           "type": "string",
@@ -69,6 +72,7 @@
       },
       "required": [
         "callback_url",
+        "user_id",
         "idempotency_key"
       ],
       "additionalProperties": false

@@ -25,6 +25,16 @@ currently in flight.
 Tools a token's scopes do not cover are **not advertised**, so an agent never
 sees a tool it cannot use.
 
+### Starting a verification
+
+`xident_start_verification` needs `callback_url`, `user_id` (your own
+identifier for the person being verified) and `idempotency_key`. For
+`age_verification` (the default) it also needs `min_age`, a whole number from
+12 to 25: Xident rounds it up to the next of 12, 15, 18, 21 or 25, so 19 is
+enforced as 21. An `id_verification` takes no `min_age` and cannot use
+`verification_mode: facial`. The tool refuses these mistakes before calling the
+API, with the same error code the API would send.
+
 ## What it cannot do, by design
 
 No tool deletes a 2FA enrollment, writes to the fraud blacklist, or changes
@@ -57,6 +67,12 @@ tokens are bound to it (RFC 8707) and a mismatch rejects every request.
 
 Tool names, scopes, and input schemas are **additive-only**, pinned by a golden
 test. A rename or a scope change fails the build.
+
+One planned exception: from the API release that makes every session setting
+server-only (xident-io/api#44), `xident_start_verification` follows the API's
+init rules: `user_id` is required and `min_age` is 12 to 25. The API refuses the
+old inputs from that release, so keeping them in the schema would only move the
+error to the API call.
 
 ## Licence
 

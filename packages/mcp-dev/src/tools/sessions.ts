@@ -1,5 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import { explainReason, keyKind } from "@xident/mcp-shared";
+import {
+  checkInitArgs, explainReason, keyKind, MIN_AGE_CEILING, MIN_AGE_DESCRIPTION, MIN_AGE_FLOOR,
+  PURPOSE_DESCRIPTION, VERIFICATION_MODE_DESCRIPTION,
+} from "@xident/mcp-shared";
 import { fail, ok, requireClient, type ToolDef } from "./types.js";
 
 const SANDBOX_ONLY_FIX =
@@ -12,6 +16,22 @@ function requireSandbox(ctx: { sandbox: boolean; apiKey: string | null }) {
     return fail("LIVE_KEY_REFUSED", "This tool refuses to run against a live API key.", SANDBOX_ONLY_FIX);
   }
   return null;
+}
+
+/** The start of every user_id this tool generates. */
+export const DEV_USER_ID_PREFIX = "mcp-dev-";
+
+/**
+ * A user_id for a sandbox session when the caller gives none.
+ *
+ * The API requires a user_id on every session (api PR #44). For a quick test
+ * the developer has no person to name, so the tool makes one up: "mcp-dev-"
+ * and 16 hex characters from the operating system's random source. It starts
+ * with none of the credential prefixes the API refuses as a user_id (sk_, ak_,
+ * xat_, xit_, xtk_), and it never ends in "+fail", so the test session passes.
+ */
+export function generateDevUserId(): string {
+  return DEV_USER_ID_PREFIX + randomBytes(8).toString("hex");
 }
 
 export const whoamiTool: ToolDef = {
@@ -55,11 +75,14 @@ export const startTestVerificationTool: ToolDef = {
     "Create a sandbox verification session and return a verify_url to open in a browser. " +
     "Sandbox keys only. Use this to see the real flow end to end while building an integration.",
   inputSchema: {
-    min_age: z.number().int().min(0).max(120).optional().describe("Age gate to test, e.g. 18"),
-    purpose: z.enum(["age_verification", "id_verification"]).optional().describe("Default age_verification"),
-    verification_mode: z.enum(["auto", "document", "facial"]).optional()
-      .describe("auto (default), document (forces ID + face match), facial (on-device only)"),
-    callback_url: z.string().url().optional().describe("Where the widget returns the user"),
+    min_age: z.number().int().min(MIN_AGE_FLOOR).max(MIN_AGE_CEILING).optional().describe(MIN_AGE_DESCRIPTION),
+    purpose: z.enum(["age_verification", "id_verification"]).optional().describe(PURPOSE_DESCRIPTION),
+    verification_mode: z.enum(["auto", "document", "facial"]).optional().describe(VERIFICATION_MODE_DESCRIPTION),
+    callback_url: z.string().url().describe(
+      "REQUIRED. Where the widget returns the user: HTTPS, or http://localhost in development"),
+    user_id: z.string().min(1).optional().describe(
+      "Your identifier for the test person. It comes back on the callback and in the result. Leave it out " +
+      "and the tool generates mcp-dev-<random>. End it with +fail to make the test session fail."),
     locale: z.string().optional().describe("BCP-47 locale, e.g. de-DE"),
   },
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -69,9 +92,17 @@ export const startTestVerificationTool: ToolDef = {
     if (guard) return guard;
 
     const body: Record<string, unknown> = {};
-    for (const key of ["min_age", "purpose", "verification_mode", "callback_url", "locale"]) {
+    for (const key of ["min_age", "purpose", "verification_mode", "callback_url", "user_id", "locale"]) {
       if (args[key] !== undefined) body[key] = args[key];
     }
+    // Only a user_id that was left out gets the generated default. One that
+    // was sent blank is refused below, not silently replaced.
+    if (body["user_id"] === undefined) body["user_id"] = generateDevUserId();
+
+    // The API refuses these settings too. Checking first gives the same
+    // refusal without a request.
+    const problem = checkInitArgs(body);
+    if (problem) return problem;
 
     const res = await ctx.client!.request<Record<string, unknown>>("POST", "/verify/v1/init", {
       body,
@@ -82,6 +113,7 @@ export const startTestVerificationTool: ToolDef = {
     return ok({
       created: true,
       ...res.data,
+      user_id: body["user_id"],
       next_step: "Open verify_url in a browser to run the flow, then call xident_get_result with the token.",
     });
   },

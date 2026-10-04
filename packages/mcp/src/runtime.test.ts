@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { XidentClient } from "@xident/mcp-shared";
 import { configFromEnv, DEFAULTS } from "./config.js";
 import { bearerFrom, effectiveScopes, resolveToken } from "./auth.js";
 import { challengeHeader, protectedResourceMetadata, SUPPORTED_SCOPES } from "./prm.js";
@@ -170,5 +172,79 @@ describe("effectiveScopes", () => {
   it("gives a scoped credential only what it holds", () => {
     const scopes = effectiveScopes({ ok: true, scopes: ["blacklist:read"], unrestricted: false }, SUPPORTED_SCOPES);
     expect(toolsForScopes(scopes).map((t) => t.name)).toEqual(["xident_list_blacklist"]);
+  });
+});
+
+describe("xident_start_verification settings (api PR #44)", () => {
+  const start = RUNTIME_TOOLS.find((t) => t.name === "xident_start_verification")!;
+  const schema = z.object(start.inputSchema);
+  const valid = {
+    callback_url: "https://example.com/done",
+    user_id: "u-1",
+    min_age: 18,
+    idempotency_key: "k-1",
+  };
+
+  function jsonRes(status: number, body: unknown): Response {
+    return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  }
+  function clientWith(f: ReturnType<typeof vi.fn>): XidentClient {
+    return new XidentClient({ baseUrl: "https://api.test", apiKey: "xat_1", fetchImpl: f as never });
+  }
+
+  it("requires user_id in the published schema", () => {
+    // Fails if user_id goes back to optional.
+    expect(start.inputSchema["user_id"]!.isOptional()).toBe(false);
+    const { user_id: _omit, ...withoutUser } = valid;
+    expect(schema.safeParse(withoutUser).success).toBe(false);
+    expect(schema.safeParse({ ...valid, user_id: "" }).success).toBe(false);
+  });
+
+  it.each([[11, false], [12, true], [19, true], [25, true], [26, false], [99, false], [18.5, false]])(
+    "schema: min_age %s accepted is %s", (minAge, accepted) => {
+      // Fails if the range goes back to 1 to 99.
+      expect(schema.safeParse({ ...valid, min_age: minAge }).success).toBe(accepted);
+    });
+
+  it("explains the band rounding and the id_verification rule to the agent", () => {
+    const d = start.inputSchema["min_age"]!.description ?? "";
+    expect(d).toContain("12 to 25");
+    expect(d).toContain("19 is enforced as 21");
+    expect(d).toContain("id_verification");
+    expect(start.inputSchema["verification_mode"]!.description ?? "").toContain("facial cannot be combined");
+  });
+
+  it("sends the age as given, with the user_id", async () => {
+    // Fails if the tool rounds locally or drops user_id from the body.
+    const f = vi.fn(async () => jsonRes(201, { success: true, data: { token: "xit_1", verify_url: "https://v/x" } }));
+    const out = await start.handler({ ...valid, min_age: 19 }, clientWith(f));
+    expect(out).toMatchObject({ token: "xit_1" });
+    const init = f.mock.calls[0]![1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toEqual({
+      min_age: 19, callback_url: "https://example.com/done", user_id: "u-1",
+    });
+  });
+
+  it.each([
+    ["a blank user_id", { ...valid, user_id: "   " }, "MISSING_USER_ID"],
+    ["an age verification with no min_age", { ...valid, min_age: undefined }, "INVALID_MIN_AGE"],
+    ["an id verification with min_age 18", { ...valid, purpose: "id_verification" }, "INVALID_MIN_AGE"],
+    ["an id verification with facial",
+      { ...valid, min_age: undefined, purpose: "id_verification", verification_mode: "facial" },
+      "INVALID_VERIFICATION_MODE"],
+  ])("refuses %s without a request", async (_label, args, code) => {
+    // Fails if the handler stops calling checkInitArgs before the request.
+    const f = vi.fn(async () => jsonRes(201, {}));
+    const out = await start.handler(args as Record<string, unknown>, clientWith(f)) as Record<string, unknown>;
+    expect(out).toMatchObject({ error: true, status: 400, code });
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("lets an id verification with document through", async () => {
+    const f = vi.fn(async () => jsonRes(201, { success: true, data: { token: "xit_2" } }));
+    await start.handler(
+      { ...valid, min_age: undefined, purpose: "id_verification", verification_mode: "document" }, clientWith(f));
+    expect(f).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String((f.mock.calls[0]![1] as RequestInit).body))).not.toHaveProperty("min_age");
   });
 });

@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { XidentClient } from "@xident/mcp-shared";
+import {
+  checkInitArgs, MIN_AGE_CEILING, MIN_AGE_DESCRIPTION, MIN_AGE_FLOOR, PURPOSE_DESCRIPTION,
+  VERIFICATION_MODE_DESCRIPTION, XidentClient,
+} from "@xident/mcp-shared";
 import type { ZodRawShape } from "zod";
 
 /** A runtime tool, gated on the scope its caller must hold. */
@@ -43,11 +46,13 @@ const startVerification: RuntimeTool = {
     "The person must open the URL themselves; there is no way to verify someone without their participation.",
   scope: "verification:write",
   inputSchema: {
-    min_age: z.number().int().min(1).max(99).optional().describe("Age gate, e.g. 18"),
-    purpose: z.enum(["age_verification", "id_verification"]).optional(),
-    verification_mode: z.enum(["auto", "document", "facial"]).optional(),
+    min_age: z.number().int().min(MIN_AGE_FLOOR).max(MIN_AGE_CEILING).optional().describe(MIN_AGE_DESCRIPTION),
+    purpose: z.enum(["age_verification", "id_verification"]).optional().describe(PURPOSE_DESCRIPTION),
+    verification_mode: z.enum(["auto", "document", "facial"]).optional().describe(VERIFICATION_MODE_DESCRIPTION),
     callback_url: z.string().url().describe("Where the person returns after the flow"),
-    user_id: z.string().optional().describe("Your identifier for the person, echoed back"),
+    user_id: z.string().min(1).describe(
+      "REQUIRED. Your own identifier for the person being verified. It comes back on the callback and in " +
+      "the result. Must not be a Xident key or token."),
     idempotency_key: z.string().min(1).describe(
       "REQUIRED. A stable key for this logical request. Retrying with the same key returns the same session " +
       "instead of creating a second one."),
@@ -58,6 +63,10 @@ const startVerification: RuntimeTool = {
     for (const k of ["min_age", "purpose", "verification_mode", "callback_url", "user_id"]) {
       if (args[k] !== undefined) body[k] = args[k];
     }
+    // The API refuses these settings too. Checking first gives the agent the
+    // same refusal without a request.
+    const problem = checkInitArgs(body);
+    if (problem) return problem;
     const res = await client.request<Record<string, unknown>>("POST", "/verify/v1/init", {
       body,
       idempotencyKey: String(args["idempotency_key"] ?? ""),

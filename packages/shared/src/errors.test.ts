@@ -29,6 +29,19 @@ describe("toAgentError", () => {
   it("survives a null body", () => {
     expect(toAgentError(500, null).code).toBe("HTTP_500");
   });
+
+  it("tells an agent with a public key that init needs a server key", () => {
+    // From the release of api PR #44, POST /verify/v1/init refuses pk_ keys.
+    const e = toAgentError(403, { error: { code: "SECRET_KEY_REQUIRED", message: "secret key required" } });
+    expect(e.fix).toContain("server key");
+    expect(e.retryable).toBe(false);
+  });
+
+  it("tells an agent not to reuse an idempotency key for other settings", () => {
+    const e = toAgentError(422, { error: { code: "IDEMPOTENCY_KEY_MISMATCH" } });
+    expect(e.fix).toContain("new key");
+    expect(e.retryable).toBe(false);
+  });
 });
 
 describe("explainReason", () => {

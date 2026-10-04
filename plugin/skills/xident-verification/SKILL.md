@@ -43,12 +43,26 @@ Authorization: Bearer sk_live_...
 Content-Type: application/json
 Idempotency-Key: <your-unique-id>
 
-{ "min_age": 18, "callback_url": "https://yoursite.com/verify/done" }
+{ "min_age": 18, "user_id": "user_123", "callback_url": "https://yoursite.com/verify/done" }
 ```
 
-Optional fields: `purpose` (`age_verification` default, or `id_verification`),
-`verification_mode` (`auto` default, `document`, `facial`), `user_id`,
-`success_url`, `failed_url`, `locale`, `theme`, `metadata`.
+Required fields:
+
+- `callback_url`: where the widget returns the person.
+- `user_id`: your own identifier for the person being verified. It comes back on
+  the callback and in the result.
+- `min_age`, for `age_verification` (the default): a whole number from 12 to 25.
+  Xident rounds it up to the next of 12, 15, 18, 21 or 25 and enforces that
+  band, so 19 is enforced as 21.
+
+Optional fields: `purpose` (`age_verification` default, or `id_verification`,
+which always needs a document and a face match and takes no `min_age`),
+`verification_mode` (`auto` default, `document`, `facial`; `facial` cannot be
+combined with `id_verification`), `success_url`, `failed_url`, `locale`,
+`theme`, `metadata`.
+
+These settings are fixed when the session is created. Nothing the browser sends
+later can change them, so a person cannot lower the age or skip the document.
 
 **Send `Idempotency-Key`.** Retries are normal; without it a retry creates a
 second session.
@@ -56,8 +70,12 @@ second session.
 Response is `201`, wrapped in the standard envelope:
 
 ```json
-{ "success": true, "data": { "token": "xtk_...", "verify_url": "https://verify.xident.io/..." }, "meta": {} }
+{ "success": true, "data": { "token": "xit_...", "verify_url": "https://verify.xident.io/..." }, "meta": {} }
 ```
+
+`token` here is the init token (`xit_`). It only builds `verify_url`. The result
+token (`xtk_`) comes back on your `callback_url` as the `token` query parameter
+and in the webhook; that is the one you pass to step 3.
 
 **Every Xident endpoint wraps its payload in `{ success, data, error, meta }`.**
 Read `data`. This is the most common integration mistake.
@@ -144,7 +162,7 @@ bug. See `references/webhooks.md` for working code.
 |---|---|
 | `sk_` | Secret. Server-side only. Creates sessions, reads results. |
 | `ak_` | Agent key. Scoped subset, for automated/AI callers. |
-| `pk_` | Public. Reserved for future client-side use — not for these calls. |
+| `pk_` | Public. The widget uses it in the browser. It cannot create a session: init answers 403 `SECRET_KEY_REQUIRED`. |
 
 Keys containing `_test_` are sandbox. Develop against sandbox.
 

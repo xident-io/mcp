@@ -54,6 +54,15 @@ AI agent.
 \* `xident_explain_session` needs a key only when you pass a token instead of a
 reason code.
 
+### Starting a test verification
+
+`xident_start_test_verification` needs `callback_url`. For `age_verification`
+(the default) it also needs `min_age`, a whole number from 12 to 25: Xident
+rounds it up to the next of 12, 15, 18, 21 or 25, so 19 is enforced as 21. An
+`id_verification` takes no `min_age` and cannot use `verification_mode: facial`.
+Every session needs a `user_id`: leave it out and the tool generates
+`mcp-dev-<random>`. End it with `+fail` to make the sandbox session fail.
+
 ## What these servers deliberately cannot do
 
 No tool deletes anything, writes to a fraud blacklist, or changes billing.
@@ -82,6 +91,12 @@ See [packages/mcp](packages/mcp) for the full contract.
 
 Tool names and input schemas are **additive-only**, pinned by a golden test. A
 rename is a broken promise, not a snapshot to regenerate.
+
+One planned exception: from the API release that makes every session setting
+server-only (xident-io/api#44), the start tools follow the API's init rules.
+`user_id` is required, `min_age` is 12 to 25, and the dev tool requires
+`callback_url`. The API refuses the old inputs from that release, so keeping
+them in the schema would only move the error to the API call.
 
 ## Development
 

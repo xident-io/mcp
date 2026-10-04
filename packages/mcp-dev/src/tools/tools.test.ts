@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { contextFromEnv, type DevContext } from "../context.js";
 import { getEndpointTool, searchDocsTool } from "./docs.js";
 import {
-  checkIntegrationTool, explainSessionTool, getResultTool,
+  checkIntegrationTool, DEV_USER_ID_PREFIX, explainSessionTool, generateDevUserId, getResultTool,
   startTestVerificationTool, whoamiTool,
 } from "./sessions.js";
+import { z } from "zod";
 import { simulateWebhookTool, verifySignatureTool } from "./webhooks.js";
 import { computeSignature } from "@xident/mcp-shared";
 
@@ -95,25 +96,106 @@ describe("xident_start_test_verification", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  const cb = "https://example.com/done";
+
   it("creates a session and sends an idempotency key", async () => {
-    const fetchImpl = vi.fn(async () => json(200, { token: "xtk_1", verify_url: "https://verify.xident.io/x" }));
-    const out = await startTestVerificationTool.handler({ min_age: 18 }, sandboxCtx(fetchImpl as never)) as Json;
+    const fetchImpl = vi.fn(async () => json(200, { token: "xit_1", verify_url: "https://verify.xident.io/x" }));
+    const out = await startTestVerificationTool.handler(
+      { min_age: 18, callback_url: cb, user_id: "u-1" }, sandboxCtx(fetchImpl as never)) as Json;
     expect(out["created"]).toBe(true);
+    expect(out["user_id"]).toBe("u-1");
     const init = fetchImpl.mock.calls[0]![1] as RequestInit;
     expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBeTruthy();
-    expect(JSON.parse(String(init.body))).toEqual({ min_age: 18 });
+    expect(JSON.parse(String(init.body))).toEqual({ min_age: 18, callback_url: cb, user_id: "u-1" });
   });
 
   it("omits absent optional fields rather than sending nulls", async () => {
     const fetchImpl = vi.fn(async () => json(200, {}));
-    await startTestVerificationTool.handler({}, sandboxCtx(fetchImpl as never));
-    expect(JSON.parse(String((fetchImpl.mock.calls[0]![1] as RequestInit).body))).toEqual({});
+    await startTestVerificationTool.handler(
+      { min_age: 18, callback_url: cb, user_id: "u-1" }, sandboxCtx(fetchImpl as never));
+    expect(Object.keys(JSON.parse(String((fetchImpl.mock.calls[0]![1] as RequestInit).body))).sort())
+      .toEqual(["callback_url", "min_age", "user_id"]);
   });
 
   it("surfaces a billing error with its remedy", async () => {
     const fetchImpl = vi.fn(async () => json(402, { code: "ALLOWANCE_EXHAUSTED" }));
-    const out = await startTestVerificationTool.handler({}, sandboxCtx(fetchImpl as never)) as Json;
+    const out = await startTestVerificationTool.handler(
+      { min_age: 18, callback_url: cb }, sandboxCtx(fetchImpl as never)) as Json;
     expect(out["code"]).toBe("ALLOWANCE_EXHAUSTED");
+  });
+
+  it("generates a user_id when none is given, and sends and returns it", async () => {
+    // Fails if the default is dropped: the API answers 400 MISSING_USER_ID.
+    const fetchImpl = vi.fn(async () => json(200, { token: "xit_1" }));
+    const out = await startTestVerificationTool.handler(
+      { min_age: 18, callback_url: cb }, sandboxCtx(fetchImpl as never)) as Json;
+    const sent = JSON.parse(String((fetchImpl.mock.calls[0]![1] as RequestInit).body)) as Json;
+    expect(String(sent["user_id"])).toMatch(/^mcp-dev-[0-9a-f]{16}$/);
+    expect(out["user_id"]).toBe(sent["user_id"]);
+  });
+
+  it("refuses a blank user_id instead of replacing it", async () => {
+    // Fails if a blank value is silently swapped for the generated one.
+    const fetchImpl = vi.fn(async () => json(200, {}));
+    const out = await startTestVerificationTool.handler(
+      { min_age: 18, callback_url: cb, user_id: "  " }, sandboxCtx(fetchImpl as never)) as Json;
+    expect(out["code"]).toBe("MISSING_USER_ID");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["no callback_url", { min_age: 18 }, "MISSING_CALLBACK_URL"],
+    ["an age verification with no min_age", { callback_url: cb }, "INVALID_MIN_AGE"],
+    ["min_age 26", { callback_url: cb, min_age: 26 }, "INVALID_MIN_AGE"],
+    ["an id verification with min_age 18", { callback_url: cb, purpose: "id_verification", min_age: 18 }, "INVALID_MIN_AGE"],
+    ["an id verification with facial",
+      { callback_url: cb, purpose: "id_verification", verification_mode: "facial" }, "INVALID_VERIFICATION_MODE"],
+  ])("refuses %s without a request", async (_label, args, code) => {
+    const fetchImpl = vi.fn(async () => json(200, {}));
+    const out = await startTestVerificationTool.handler(
+      args as Record<string, unknown>, sandboxCtx(fetchImpl as never)) as Json;
+    expect(out).toMatchObject({ error: true, status: 400, code });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("keeps the sandbox rule ahead of the settings check", async () => {
+    // Guard: a live key is refused even with valid settings.
+    const fetchImpl = vi.fn(async () => json(200, {}));
+    const out = await startTestVerificationTool.handler(
+      { min_age: 18, callback_url: cb }, liveCtx(fetchImpl as never)) as Json;
+    expect(out["code"]).toBe("LIVE_KEY_REFUSED");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("publishes callback_url as required and ages as 12 to 25", () => {
+    const schema = z.object(startTestVerificationTool.inputSchema);
+    expect(startTestVerificationTool.inputSchema["callback_url"]!.isOptional()).toBe(false);
+    expect(schema.safeParse({ min_age: 18 }).success).toBe(false);
+    for (const [age, accepted] of [[11, false], [12, true], [25, true], [26, false], [0, false], [120, false]] as const) {
+      expect(schema.safeParse({ callback_url: cb, min_age: age }).success).toBe(accepted);
+    }
+    expect(schema.safeParse({ callback_url: cb, min_age: 18, user_id: "" }).success).toBe(false);
+  });
+});
+
+describe("generateDevUserId", () => {
+  it("is mcp-dev- and 16 hex characters, different on every call", () => {
+    const ids = new Set(Array.from({ length: 50 }, () => generateDevUserId()));
+    expect(ids.size).toBe(50);
+    for (const id of ids) expect(id).toMatch(/^mcp-dev-[0-9a-f]{16}$/);
+  });
+
+  it("never looks like a Xident credential and never forces a failure", () => {
+    // The API refuses a user_id that starts with one of these (init.go credentialPrefixes),
+    // and a test session whose user_id ends in +fail is settled as failed.
+    for (let i = 0; i < 50; i++) {
+      const id = generateDevUserId();
+      for (const prefix of ["xat_", "sk_", "ak_", "xtk_", "xit_", "pk_"]) {
+        expect(id.startsWith(prefix)).toBe(false);
+      }
+      expect(id.startsWith(DEV_USER_ID_PREFIX)).toBe(true);
+      expect(id.endsWith("+fail")).toBe(false);
+    }
   });
 });
 
