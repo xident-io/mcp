@@ -31,6 +31,15 @@ subscriptions.
 Subscriptions are explicit per type: subscribing to `session.success` does not
 enrol you in `session.failed`.
 
+## Acting on an event
+
+`session.success` says the session passed. Before you grant anything from it,
+apply the access checks of SKILL.md (Step 3, "Deciding access") to `data`:
+`external_user_id` is the user you started the verification for, `verified`
+is `true`, `checks.age.gate` is present and at least your own required age
+(not `checks.age.passed`, which is false on a Xident ID reuse and an EU wallet
+pass), and `test` is not `true`.
+
 ## Signature
 
 Header: `X-Xident-Signature: t=<unix-seconds>,v1=<hex>`

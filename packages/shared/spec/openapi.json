@@ -2220,7 +2220,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Exchange API key + verification params for a short-lived init token",
+        "description": "Exchange your server key and the verification settings for a short-lived init token and the verify_url to send the person to. Requires a server key (sk_live_, sk_test_, ak_live_, ak_test_ or an agent access token); a public key gets 403 SECRET_KEY_REQUIRED. user_id is required. min_age is 12 to 25 for age_verification and is rounded up to the next of 12, 15, 18, 21 or 25; id_verification takes no min_age and cannot be combined with verification_mode facial. The token lives 10 minutes. Every setting of the session comes from this token; nothing the browser sends can change it.",
         "consumes": [
           "application/json"
         ],
@@ -2240,6 +2240,19 @@
             "schema": {
               "$ref": "#/definitions/internal_api_handlers_verify.createInitRequest"
             }
+          },
+          {
+            "type": "string",
+            "description": "makes a retry return the same token for 10 minutes; the same key with a different body gets 422 IDEMPOTENCY_KEY_MISMATCH",
+            "name": "Idempotency-Key",
+            "in": "header"
+          },
+          {
+            "name": "X-API-Version",
+            "in": "header",
+            "type": "string",
+            "required": false,
+            "description": "Dated API version, e.g. 2026-08-13. Overrides the version pinned to the API key for this request only; omit it to use the pin. The response echoes the version it was served under in this same header and in meta.api_version, except when the request is refused before its version is resolved: a missing or invalid API key (401), a failed API key lookup (500), a rate limit (429), a body whose declared Content-Length is over 10 MB (413 PAYLOAD_TOO_LARGE) or an invalid X-API-Version (400 INVALID_API_VERSION). See https://docs.xident.io/api-versioning"
           }
         ],
         "responses": {
@@ -2263,6 +2276,30 @@
           },
           "400": {
             "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
             "schema": {
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
@@ -2677,7 +2714,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Determines which verification methods are required using the API key from authentication middleware.",
+        "description": "Creates the verification session from an init token with your server key (sk_live_, sk_test_, ak_live_, ak_test_ or an agent access token) and returns the methods it requires; a public key gets 403 SECRET_KEY_REQUIRED. Send the init token in the X-Init-Token header; it must belong to the project of the key. Every setting of the session comes from that token; query parameters are not read. A test key makes a test session. Without the header: 400 MISSING_INIT_TOKEN. Unknown or expired token: 404. Token of another project: 400 INIT_TOKEN_KEY_MISMATCH. A credential whose mode differs from its project's: 403 KEY_MODE_MISMATCH.",
         "produces": [
           "application/json"
         ],
@@ -2685,6 +2722,22 @@
           "SDK"
         ],
         "summary": "Check verification requirements (authenticated)",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "the init token (xit_...) that POST /verify/v1/init returned; the session's settings come from it",
+            "name": "X-Init-Token",
+            "in": "header",
+            "required": true
+          },
+          {
+            "name": "X-API-Version",
+            "in": "header",
+            "type": "string",
+            "required": false,
+            "description": "Dated API version, e.g. 2026-08-13. Overrides the version pinned to the API key for this request only; omit it to use the pin. The response echoes the version it was served under in this same header and in meta.api_version, except when the request is refused before its version is resolved: a missing or invalid API key (401), a failed API key lookup (500), a rate limit (429), a body whose declared Content-Length is over 10 MB (413 PAYLOAD_TOO_LARGE) or an invalid X-API-Version (400 INVALID_API_VERSION). See https://docs.xident.io/api-versioning"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2692,8 +2745,26 @@
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          },
           "401": {
             "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          },
+          "404": {
+            "description": "Not Found",
             "schema": {
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
@@ -2709,7 +2780,7 @@
     },
     "/verify/v1/requirements/check": {
       "get": {
-        "description": "Determines which verification methods are required based on API key and user location. Accepts API key via X-API-Key header.",
+        "description": "Creates the verification session from an init token and returns the methods it requires. Send your public key (pk_live_ or pk_test_) in the X-API-Key header; a secret key is refused with 401. Send the init token from the verify_url (?t=xit_...) in the X-Init-Token header; it must belong to the same project. Every setting of the session (minimum age, purpose, verification mode, user id, liveness difficulty, locale, theme, data match) comes from that token; query parameters are not read. Without the header: 400 MISSING_INIT_TOKEN. Unknown or expired token: 404. Token of another project: 400 INIT_TOKEN_KEY_MISMATCH.",
         "produces": [
           "application/json"
         ],
@@ -2720,16 +2791,16 @@
         "parameters": [
           {
             "type": "string",
-            "description": "API Key",
+            "description": "your public key (pk_live_ or pk_test_); this endpoint reads only this header, not Authorization: Bearer",
             "name": "X-API-Key",
             "in": "header",
             "required": true
           },
           {
             "type": "string",
-            "description": "External user ID for retry tracking",
-            "name": "user_id",
-            "in": "query",
+            "description": "the init token (xit_...) that POST /verify/v1/init returned with your server key; the session's settings come from it",
+            "name": "X-Init-Token",
+            "in": "header",
             "required": true
           }
         ],
@@ -2748,6 +2819,12 @@
           },
           "401": {
             "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
+            }
+          },
+          "404": {
+            "description": "Not Found",
             "schema": {
               "$ref": "#/definitions/github_com_xident-io_api_internal_api_response.Envelope"
             }
@@ -4214,6 +4291,10 @@
         "callback_url": {
           "type": "string"
         },
+        "expected_ref": {
+          "description": "opaque reference to the identity data the site owner sent as expected; the server links it to the session it creates from this token, so it needs no handling",
+          "type": "string"
+        },
         "failed_url": {
           "type": "string"
         },
@@ -4221,9 +4302,6 @@
           "type": "string"
         },
         "locale": {
-          "type": "string"
-        },
-        "metadata": {
           "type": "string"
         },
         "min_age": {
@@ -4243,7 +4321,7 @@
           "type": "string"
         },
         "verification_mode": {
-          "description": "VerificationMode: \"auto\" (default) | \"document\" | \"facial\".\nSee models.VerificationMode* for what each enforces.",
+          "description": "\"auto\" (default), \"document\" (an ID document is always required) or \"facial\" (on-device checks only, never a document)",
           "type": "string"
         }
       }
@@ -4359,6 +4437,28 @@
           "type": "string"
         },
         "session_id": {
+          "type": "string"
+        }
+      }
+    },
+    "github_com_xident-io_api_pkg_datamatch.Expected": {
+      "type": "object",
+      "properties": {
+        "date_of_birth": {
+          "description": "YYYY-MM-DD",
+          "type": "string"
+        },
+        "document_number": {
+          "type": "string"
+        },
+        "first_name": {
+          "type": "string"
+        },
+        "last_name": {
+          "type": "string"
+        },
+        "nationality": {
+          "description": "ISO 3166-1 alpha-2",
           "type": "string"
         }
       }
@@ -5197,24 +5297,41 @@
         "callback_url": {
           "type": "string"
         },
+        "expected": {
+          "description": "the identity data you already hold about the user; Xident compares it with the document and reports match, mismatch or not_on_document per field, and the values never come back; needs a document (purpose id_verification or verification_mode document)",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_xident-io_api_pkg_datamatch.Expected"
+            }
+          ]
+        },
         "failed_url": {
           "type": "string"
         },
         "liveness_difficulty": {
+          "description": "\"easy\" (default), \"medium\" or \"hard\"; any other value is refused with 400 INVALID_LIVENESS_DIFFICULTY",
           "type": "string"
         },
         "locale": {
           "type": "string"
         },
-        "metadata": {
-          "type": "string"
-        },
         "min_age": {
-          "type": "integer"
+          "description": "for age_verification: 12 to 25, rounded up to the next of 12, 15, 18, 21 or 25 (19 is enforced as 21); id_verification takes none (omit it or send 0)",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 25
+        },
+        "mismatch_policy": {
+          "description": "\"report\" (default) records the outcome only; \"review\" sends the session to your review queue on any mismatch",
+          "type": "string"
         },
         "purpose": {
           "description": "\"age_verification\" (default) or \"id_verification\"",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "age_verification",
+            "id_verification"
+          ]
         },
         "success_url": {
           "type": "string"
@@ -5223,13 +5340,23 @@
           "type": "string"
         },
         "user_id": {
+          "description": "required: your own identifier for the person being verified; it is echoed back in results",
           "type": "string"
         },
         "verification_mode": {
-          "description": "VerificationMode overrides the rule engine's method choice for THIS\nsession: \"auto\" (default), \"document\" (mandatory ID + face match, no\non-device estimation), or \"facial\" (on-device only, never a document).\n\nIt composes with MinAge rather than replacing it, which is the difference\nfrom Purpose: `purpose: \"id_verification\"` also forces a document but\nzeroes the age threshold, so \"show me ID AND require 21\" was previously\ninexpressible.",
-          "type": "string"
+          "description": "\"auto\" (default), \"document\" (an ID document and a face match are always required, no on-device age estimation) or \"facial\" (on-device only, never a document; refused with purpose id_verification); unlike purpose id_verification, it keeps min_age",
+          "type": "string",
+          "enum": [
+            "auto",
+            "document",
+            "facial"
+          ]
         }
-      }
+      },
+      "required": [
+        "callback_url",
+        "user_id"
+      ]
     },
     "internal_api_handlers_verify.createInitResponse": {
       "type": "object",

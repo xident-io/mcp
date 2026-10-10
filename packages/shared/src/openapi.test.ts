@@ -76,3 +76,69 @@ describe("allEndpoints", () => {
     }
   });
 });
+
+/**
+ * The bundled spec is what xident_get_endpoint and xident_search_docs serve.
+ * It used to describe the old init rules: no required user_id, any age, and
+ * settings in the URL of /requirements/check, so an agent that followed it
+ * got MISSING_USER_ID or MISSING_INIT_TOKEN from the API (Astra finding 1).
+ * These pin the rules of api PR #44 so the drift cannot come back unnoticed.
+ */
+describe("bundled spec: the init and requirements rules of api PR #44", () => {
+  type Schema = { required?: string[]; properties: Record<string, Record<string, unknown>> };
+  type Param = { name: string; in: string; required?: boolean; schema?: Schema };
+
+  function bodySchema(path: string, method: string): Schema {
+    const params = findEndpoint(path, method)!.parameters as Param[];
+    return params.find((p) => p.in === "body")!.schema!;
+  }
+
+  it("POST /verify/v1/init requires user_id and callback_url", () => {
+    expect(bodySchema("/verify/v1/init", "post").required).toEqual(expect.arrayContaining(["callback_url", "user_id"]));
+  });
+
+  it("POST /verify/v1/init bounds min_age and states the band rule", () => {
+    const minAge = bodySchema("/verify/v1/init", "post").properties["min_age"]!;
+    expect(minAge["maximum"]).toBe(25);
+    expect(minAge["minimum"]).toBe(0);
+    expect(String(minAge["description"])).toContain("12 to 25");
+    expect(String(minAge["description"])).toContain("19 is enforced as 21");
+    expect(String(minAge["description"])).toContain("id_verification takes none");
+  });
+
+  it("POST /verify/v1/init lists the purposes and modes, and the facial rule", () => {
+    const props = bodySchema("/verify/v1/init", "post").properties;
+    expect(props["purpose"]!["enum"]).toEqual(["age_verification", "id_verification"]);
+    expect(props["verification_mode"]!["enum"]).toEqual(["auto", "document", "facial"]);
+    expect(String(props["verification_mode"]!["description"])).toContain("refused with purpose id_verification");
+  });
+
+  it("POST /verify/v1/init says it needs a server key", () => {
+    const ep = findEndpoint("/verify/v1/init", "post")!;
+    expect(ep.description).toContain("SECRET_KEY_REQUIRED");
+    expect(ep.description).toContain("user_id is required");
+    expect(Object.keys(ep.responses)).toContain("403");
+  });
+
+  it.each([["/verify/v1/requirements/check"], ["/verify/v1/requirements"]])(
+    "GET %s takes the init token in X-Init-Token and no settings in the URL", (path) => {
+      const params = findEndpoint(path, "get")!.parameters as Param[];
+      expect(params.find((p) => p.name === "X-Init-Token")).toMatchObject({ in: "header", required: true });
+      expect(params.filter((p) => p.in === "query")).toEqual([]);
+    });
+
+  it("GET /verify/v1/requirements/check names the new refusals", () => {
+    const ep = findEndpoint("/verify/v1/requirements/check", "get")!;
+    expect(ep.description).toContain("MISSING_INIT_TOKEN");
+    expect(ep.description).toContain("INIT_TOKEN_KEY_MISMATCH");
+  });
+
+  it("leaves no reference the bundled resolver cannot follow on these paths", () => {
+    for (const [path, method] of [
+      ["/verify/v1/init", "post"], ["/verify/v1/init/{token}", "get"],
+      ["/verify/v1/requirements/check", "get"], ["/verify/v1/requirements", "get"],
+    ] as const) {
+      expect(JSON.stringify(findEndpoint(path, method)), path).not.toContain("$unresolved");
+    }
+  });
+});

@@ -25,6 +25,38 @@ const GUIDANCE: Record<string, { fix: string; retryable: boolean }> = {
     fix: "The account is suspended, usually for non-payment. A human must resolve it in billing settings.",
     retryable: false,
   },
+  SECRET_KEY_REQUIRED: {
+    fix: "Creating a session needs a server key (sk_live_, sk_test_, ak_live_ or ak_test_). A public key (pk_) cannot create one. Configure a server key; never put it in a browser or a mobile app.",
+    retryable: false,
+  },
+  MISSING_CALLBACK_URL: {
+    fix: "Send callback_url: the HTTPS address (or http://localhost in development) the widget returns the person to.",
+    retryable: false,
+  },
+  MISSING_USER_ID: {
+    fix: "Send user_id: your own identifier for the person being verified. It comes back on the callback and in the result.",
+    retryable: false,
+  },
+  INVALID_PURPOSE: {
+    fix: "Send purpose as age_verification (the default) or id_verification, or leave it out.",
+    retryable: false,
+  },
+  INVALID_MIN_AGE: {
+    fix: "For age_verification send min_age as a whole number from 12 to 25 (it is rounded up to the next of 12, 15, 18, 21 or 25). For id_verification leave min_age out, or send 0.",
+    retryable: false,
+  },
+  INVALID_ACCESS_CHECK: {
+    fix: "Send expected_user_id (the user your backend started the verification for) and required_min_age (a whole number from 12 to 25) together, or leave both out.",
+    retryable: false,
+  },
+  INVALID_VERIFICATION_MODE: {
+    fix: "Use auto, document or facial. An id_verification cannot use facial: leave verification_mode out, or send document.",
+    retryable: false,
+  },
+  IDEMPOTENCY_KEY_MISMATCH: {
+    fix: "This idempotency key was already used with different settings. Use a new key for a different request; reuse a key only to retry the identical request.",
+    retryable: false,
+  },
 };
 
 function defaultGuidance(status: number): { fix: string; retryable: boolean } {
