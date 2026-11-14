@@ -25,21 +25,57 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const TARGET = resolve(ROOT, "packages/shared/spec/openapi.json");
 export const DEFAULT_SOURCE = resolve(ROOT, "../../docs/public/openapi.json");
 
-/** The pin file next to a bundled spec, and its content for a spec text. */
+/** The pin file next to a bundled spec, and its content for the spec's bytes. */
 export const pinPath = (to) => `${to}.sha256`;
-export const pinFor = (text) => `${createHash("sha256").update(text).digest("hex")}  openapi.json\n`;
+export const pinFor = (bytes) => `${createHash("sha256").update(bytes).digest("hex")}  openapi.json\n`;
+
+/** The operation keys of a Swagger 2.0 path item, as packages/shared/src/openapi.ts reads them. */
+const HTTP_METHODS = ["get", "put", "post", "delete", "options", "head", "patch"];
+
+const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+/** "null", "an array", "a number", ... for an error message. */
+const kindOf = (value) => {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "an array";
+  const type = typeof value;
+  return `${/^[aeiou]/.test(type) ? "an" : "a"} ${type}`;
+};
 
 /**
- * Refuse a source that is not a public Swagger 2.0 spec with paths, so a
- * wrong or empty file is never copied over a good one.
+ * Swagger 2.0 security: a list of requirement objects, each mapping a scheme
+ * name to a list of scope names. `[]` (no auth) and `{}` (an alternative that
+ * needs no credential) are allowed. Anything else, such as `[null]`, would be
+ * read by the MCP servers as no auth, so it is refused here.
+ */
+function checkSecurity(security, where, source) {
+  const ok =
+    Array.isArray(security) &&
+    security.every(
+      (requirement) =>
+        isObject(requirement) &&
+        Object.values(requirement).every(
+          (scopes) => Array.isArray(scopes) && scopes.every((scope) => typeof scope === "string"),
+        ),
+    );
+  if (!ok) {
+    throw new Error(`${source}: the security of ${where} is not a list of {"<scheme>": ["<scope>", ...]} objects`);
+  }
+}
+
+/**
+ * Refuse a source that is not a public Swagger 2.0 spec with paths, or whose
+ * path items, operations or security blocks have the wrong shape, so a wrong,
+ * empty or broken file is never copied over a good one. A null path item, for
+ * one, would make the MCP servers' endpoint list throw.
  */
 export function validateSpec(text, source) {
   let spec;
@@ -51,6 +87,9 @@ export function validateSpec(text, source) {
   if (spec === null || typeof spec !== "object" || spec.swagger !== "2.0") {
     throw new Error(`${source} is not a Swagger 2.0 spec`);
   }
+  if (spec.paths !== undefined && !isObject(spec.paths)) {
+    throw new Error(`${source}: "paths" is ${kindOf(spec.paths)}, not an object`);
+  }
   const paths = Object.keys(spec.paths ?? {});
   if (paths.length === 0) {
     throw new Error(`${source} has no paths`);
@@ -59,32 +98,68 @@ export function validateSpec(text, source) {
   if (internal.length > 0) {
     throw new Error(`${source} has internal paths (${internal.slice(0, 3).join(", ")}); use the public filter's output`);
   }
+  if (spec.security !== undefined) checkSecurity(spec.security, "the spec (top level)", source);
+  for (const [path, item] of Object.entries(spec.paths)) {
+    if (!isObject(item)) {
+      throw new Error(`${source}: path ${path} is ${kindOf(item)}, not an object of operations`);
+    }
+    for (const method of HTTP_METHODS) {
+      if (!Object.hasOwn(item, method)) continue;
+      const op = item[method];
+      const where = `${method.toUpperCase()} ${path}`;
+      if (!isObject(op)) {
+        throw new Error(`${source}: ${where} is ${kindOf(op)}, not an operation object`);
+      }
+      if (op.security !== undefined) checkSecurity(op.security, where, source);
+    }
+  }
+}
+
+/**
+ * The source's bytes as text, refusing invalid UTF-8. A lenient decode would
+ * turn a bad byte into U+FFFD, so the text checked here and the bytes copied
+ * and hashed would differ. The byte order mark is kept, not stripped, so a
+ * file that starts with one fails JSON.parse here, as it would when the MCP
+ * servers load the bundled spec.
+ */
+function decodeUtf8(bytes, source) {
+  try {
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    throw new Error(`${source} is not valid UTF-8`);
+  }
 }
 
 /**
  * Compare or copy. Returns "unchanged", "written" or "differs" (check mode
- * only). Throws when the source cannot be read or is not a public spec.
+ * only). Throws when the source cannot be read or is not a public spec. The
+ * source's bytes are copied and hashed as they are, never a decoded and
+ * re-encoded string.
  */
 export function syncOpenapi({ from = DEFAULT_SOURCE, to = TARGET, check = false } = {}) {
-  let text;
+  let bytes;
   try {
-    text = readFileSync(from, "utf8");
+    bytes = readFileSync(from);
   } catch (err) {
     throw new Error(`cannot read ${from}: ${err.message}`);
   }
-  validateSpec(text, from);
+  validateSpec(decodeUtf8(bytes, from), from);
 
   const read = (file) => {
     try {
-      return readFileSync(file, "utf8");
+      return readFileSync(file);
     } catch {
       return null;
     }
   };
-  const pin = pinFor(text);
-  if (read(to) === text && read(pinPath(to)) === pin) return "unchanged";
+  const pin = pinFor(bytes);
+  const current = read(to);
+  const currentPin = read(pinPath(to));
+  if (current !== null && current.equals(bytes) && currentPin !== null && currentPin.equals(Buffer.from(pin))) {
+    return "unchanged";
+  }
   if (check) return "differs";
-  writeFileSync(to, text);
+  writeFileSync(to, bytes);
   writeFileSync(pinPath(to), pin);
   return "written";
 }
@@ -111,6 +186,17 @@ function main(argv) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+/**
+ * True when node was started on this file. Node loads the main module by its
+ * real path, so both sides are compared as real paths: through a symlinked
+ * directory (macOS's /var is one) a plain comparison is false, main() never
+ * runs, and `--check` exits 0 without checking anything.
+ */
+function isMain() {
+  if (!process.argv[1]) return false;
+  return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+}
+
+if (isMain()) {
   process.exit(main(process.argv.slice(2)));
 }

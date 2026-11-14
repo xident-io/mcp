@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { allEndpoints, findEndpoint, loadSpec, resolveRefs, searchEndpoints } from "./openapi.js";
+import {
+  allEndpoints, findEndpoint, loadSpec, MAX_NESTING, MAX_REF_HOPS, resolveRefs, searchEndpoints,
+} from "./openapi.js";
 
 describe("loadSpec", () => {
   it("loads the bundled Swagger 2.0 spec", () => {
@@ -120,6 +122,40 @@ describe("auth", () => {
     expect(ep.auth).toBe("Mystery");
     expect(ep.security).toEqual([[{ scheme: "Mystery" }]]);
   });
+
+  // A broken security block must never read as "no credentials needed": an
+  // agent would then call the endpoint without its key. Each of these used to
+  // give auth "none" (or a label made of the raw value).
+  it("is unknown, never none, when the security block is malformed", () => {
+    const malformed: unknown[] = [
+      [null], [42], "x", {}, null, ["ApiKeyAuth"], [[]],
+      [{ ApiKeyAuth: "x" }], [{ ApiKeyAuth: [1] }], [{ ApiKeyAuth: null }],
+      // One broken alternative makes the whole block unreadable.
+      [{ ApiKeyAuth: [] }, null],
+    ];
+    for (const security of malformed) {
+      const ep = findEndpoint("/x", "get", spec(security))!;
+      expect(ep.auth, JSON.stringify(security)).toBe("unknown");
+      expect(ep.security, JSON.stringify(security)).toBeNull();
+    }
+  });
+
+  it("is none for an empty requirement object, Swagger's 'no credential' alternative", () => {
+    const ep = findEndpoint("/x", "get", spec([{}]))!;
+    expect(ep.auth).toBe("none");
+    expect(ep.security).toEqual([[]]);
+    const optional = findEndpoint("/x", "get", spec([{ ApiKeyAuth: [] }, {}]))!;
+    expect(optional.auth).toBe("api_key or none");
+  });
+
+  it("does not take an inherited Object property for a scheme's label or definition", () => {
+    for (const name of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+      // JSON.parse, not an object literal: only JSON.parse makes "__proto__" an own key.
+      const ep = findEndpoint("/x", "get", spec(JSON.parse(`[{"${name}": []}]`)))!;
+      expect(ep.auth, name).toBe(name);
+      expect(ep.security, name).toEqual([[{ scheme: name }]]);
+    }
+  });
 });
 
 describe("resolveRefs", () => {
@@ -175,6 +211,60 @@ describe("resolveRefs", () => {
     expect(keys.has("$ref")).toBe(false);
     expect(keys.has("$truncated")).toBe(true);
     expect(JSON.stringify(out)).toMatch(/"\$truncated":"#\/definitions\/D\d+"/);
+  });
+
+  /** A spec whose chain from `{ $ref: D0 }` follows exactly `refs` pointers, ending at a string. */
+  function chain(refs: number) {
+    const definitions: Record<string, unknown> = {};
+    for (let i = 0; i < refs - 1; i++) {
+      definitions[`D${i}`] = { type: "object", properties: { next: { $ref: `#/definitions/D${i + 1}` } } };
+    }
+    definitions[`D${refs - 1}`] = { type: "string" };
+    return { swagger: "2.0", info: {}, paths: {}, definitions } as never;
+  }
+
+  it("follows a chain of exactly MAX_REF_HOPS pointers and truncates one more", () => {
+    expect(MAX_REF_HOPS).toBe(16);
+    const steps = (n: number) => Array.from({ length: n }, () => ["properties", "next"]).flat();
+
+    const full = resolveRefs({ $ref: "#/definitions/D0" }, chain(MAX_REF_HOPS));
+    expect(dig(full, ...steps(MAX_REF_HOPS - 1))).toEqual({ type: "string" });
+    expect(keysIn(full).has("$truncated")).toBe(false);
+
+    const over = resolveRefs({ $ref: "#/definitions/D0" }, chain(MAX_REF_HOPS + 1));
+    expect(dig(over, ...steps(MAX_REF_HOPS))).toEqual({ $truncated: `#/definitions/D${MAX_REF_HOPS}` });
+  });
+
+  /** `levels` wrappings of { type: array, items } around a string schema. */
+  function nested(levels: number): unknown {
+    let node: unknown = { type: "string" };
+    for (let i = 0; i < levels; i++) node = { type: "array", items: node };
+    return node;
+  }
+
+  it("stops a schema nested 10,000 levels deep with a $truncated marker, without overflowing the stack", () => {
+    const deep = nested(10_000);
+    const spec = {
+      swagger: "2.0", info: {},
+      paths: { "/deep": { post: { parameters: [{ name: "body", in: "body", schema: deep }] } } },
+    } as never;
+    let out: unknown;
+    expect(() => { out = resolveRefs(deep, spec); }).not.toThrow();
+    expect(keysIn(out).has("$truncated")).toBe(true);
+    // Through the lookup the tools use, not only resolveRefs.
+    expect(JSON.stringify(findEndpoint("/deep", "post", spec))).toContain('"$truncated"');
+    expect(() => allEndpoints(spec)).not.toThrow();
+  });
+
+  it("resolves nesting up to MAX_NESTING levels and marks the first level past it", () => {
+    const spec = { swagger: "2.0", info: {}, paths: {} } as never;
+    // The innermost object of nested(n) sits n levels below the root.
+    expect(resolveRefs(nested(MAX_NESTING - 1), spec)).toEqual(nested(MAX_NESTING - 1));
+    const out = resolveRefs(nested(MAX_NESTING), spec);
+    const steps = Array.from({ length: MAX_NESTING }, () => "items");
+    expect(dig(out, ...steps)).toEqual({ $truncated: `nested deeper than ${MAX_NESTING} levels` });
+    // The bundled spec stays well inside the limit: no endpoint is cut.
+    expect(JSON.stringify(allEndpoints())).not.toContain("$truncated");
   });
 
   it("follows a pointer into the shared parameters section", () => {
