@@ -533,34 +533,27 @@ describe("bundled spec: the init and requirements rules of api PR #44", () => {
   }
 
   // The bundled spec is the docs spec byte for byte (scripts/sync-openapi.mjs,
-  // pinned by openapi.json.sha256). The api annotations give these rules as
-  // descriptions only: the generated schema has no required list, no minimum
-  // or maximum and no enums, and callback_url has no description. mcp #4 had
-  // added those keywords to this file by hand; the sync replaces them, so the
-  // rules are pinned here as the text the spec does carry. Until the api
-  // annotations state them as schema keywords, nothing in the spec says that
-  // callback_url is required (the start tools still check it, init-args.ts).
-  it("POST /verify/v1/init says user_id is required, on the field and the endpoint", () => {
-    const userId = bodySchema("/verify/v1/init", "post").properties["user_id"]!;
-    expect(String(userId["description"])).toMatch(/^required: /);
-    expect(findEndpoint("/verify/v1/init", "post")!.description).toContain("user_id is required");
+  // pinned by openapi.json.sha256), so these keywords come from the api's own
+  // swag annotations (api #131), not from an edit of this file.
+  it("POST /verify/v1/init requires user_id and callback_url", () => {
+    expect(bodySchema("/verify/v1/init", "post").required).toEqual(expect.arrayContaining(["callback_url", "user_id"]));
   });
 
-  it("POST /verify/v1/init states the min_age range and the band rule", () => {
+  it("POST /verify/v1/init bounds min_age and states the band rule", () => {
     const minAge = bodySchema("/verify/v1/init", "post").properties["min_age"]!;
-    expect(minAge["type"]).toBe("integer");
+    expect(minAge["maximum"]).toBe(25);
+    expect(minAge["minimum"]).toBe(0);
     expect(String(minAge["description"])).toContain("12 to 25");
     expect(String(minAge["description"])).toContain("19 is enforced as 21");
-    expect(String(minAge["description"])).toContain("id_verification takes none (omit it or send 0)");
+    expect(String(minAge["description"])).toContain("id_verification takes none");
   });
 
-  it("POST /verify/v1/init names the purposes and modes, and the facial rule", () => {
+  it("POST /verify/v1/init lists the purposes and modes, and the facial rule", () => {
     const props = bodySchema("/verify/v1/init", "post").properties;
-    const purpose = String(props["purpose"]!["description"]);
-    for (const value of ["age_verification", "id_verification"]) expect(purpose).toContain(`"${value}"`);
-    const mode = String(props["verification_mode"]!["description"]);
-    for (const value of ["auto", "document", "facial"]) expect(mode).toContain(`"${value}"`);
-    expect(mode).toContain("refused with purpose id_verification");
+    // "" is listed because an omitted or empty value means the default.
+    expect(props["purpose"]!["enum"]).toEqual(["", "age_verification", "id_verification"]);
+    expect(props["verification_mode"]!["enum"]).toEqual(["", "auto", "document", "facial"]);
+    expect(String(props["verification_mode"]!["description"])).toContain("refused with purpose id_verification");
   });
 
   it("POST /verify/v1/init says it needs a server key", () => {

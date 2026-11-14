@@ -2614,7 +2614,7 @@
     },
     "/verify/v1/init/{token}": {
       "get": {
-        "description": "Exchange a one-time init token for verification config (public \u2014 no auth)",
+        "description": "Exchange an init token for the verification settings stored behind it (public, no auth). This call does not use the token up: it can be read again, for example after a page refresh, until it expires 10 minutes after POST /verify/v1/init created it.",
         "produces": [
           "application/json"
         ],
@@ -3323,7 +3323,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Stores client-side age estimation result on the verification session. The measurement fields (inference_run_id, model_sha, threshold_table_id, policy_version, align_id, widget_build, frames, threshold, outcome) are optional and never change the verdict. A measurement value of the wrong type or outside its documented limits is ignored: the request still succeeds and that value is not stored. A missing or ignored inference_run_id is replaced by an ID the server derives from the result, so a retransmission of the same result is stored once.",
+        "description": "Stores client-side age estimation result on the verification session. On an age verification, a result passes only with verified true, gate equal to the session's age_head, and a confidence at least the session's age_threshold; a result that fails this is refused with 400 AGE_BELOW_THRESHOLD and is not stored. Before that check, an estimated_age outside 0 to 120 is refused with 400 INVALID_AGE and a confidence outside 0 to 1 with 400 INVALID_CONFIDENCE. A session with no stored age check strictness (one created while the setting was not in use) has no age_head and no age_threshold: there gate must be one of the five heads and at least min_age, and the confidence at least that head's floor. A session whose age check moved to the document, or whose stored age check strictness cannot be read, has neither value too, and no result passes for it. An ID verification has no age check: its result is stored without gate or verified being checked; the two range checks above still apply. The measurement fields (inference_run_id, model_sha, threshold_table_id, policy_version, align_id, widget_build, frames, threshold, outcome) are optional and never change the verdict. A measurement value of the wrong type or outside its documented limits is ignored: the request still succeeds and that value is not stored. A missing or ignored inference_run_id is replaced by an ID the server derives from the result, so a retransmission of the same result is stored once.",
         "consumes": [
           "application/json"
         ],
@@ -3828,7 +3828,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Starts a new attempt linked to the given session: returns a new session token in the same retake chain, and the widget restarts capture against it. Refused with 409 RETAKE_NOT_ALLOWED when the session's status is success, canceled or retaken, or when it is a test session, or when the tenant's current plan has no document path and the session's document step is mandatory (an ID verification, or a list that holds \"ocr\"); every other status can be retaken. On such a plan an optional document step (ocr_fallback) is not copied to the retake. Refused with 409 RETAKE_LIMIT_EXCEEDED after 3 retakes in one chain.",
+        "description": "Starts a new attempt linked to the given session: returns a new session token in the same retake chain, and the widget restarts capture against it. Refused with 409 RETAKE_NOT_ALLOWED when the session's status is success, canceled or retaken; when it is a test session; when the tenant's current plan has no document path and the session has a document step, mandatory or optional (a retake runs exactly the checks of the session it retakes, never a shorter list); or, once the age check strictness is in use, when the session has no stored age check strictness (created before that setting, or its details deleted after 90 days) and can pass without a document, through a camera age check, the optional document fallback or a wallet; every other status can be retaken. A retake keeps the age check strictness and age-model head of the session it retakes, even if the tenant changed the setting since. Refused with 409 RETAKE_LIMIT_EXCEEDED after 3 retakes in one chain. Answers 500 when the server cannot read the tenant's plan; the retake can be tried again.",
         "consumes": [
           "application/json"
         ],
@@ -3878,6 +3878,12 @@
           },
           "409": {
             "description": "RETAKE_NOT_ALLOWED or RETAKE_LIMIT_EXCEEDED",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "500": {
+            "description": "the tenant's plan could not be read; try again",
             "schema": {
               "$ref": "#/definitions/Envelope"
             }
@@ -4658,6 +4664,7 @@
           ]
         },
         "confidence": {
+          "description": "the widget's confidence in its result, 0 to 1; required for a pass, and at least the age_threshold that GET /verify/v1/requirements/check returned for this session; for a session with no stored age check strictness, at least the confidence floor of the head in gate",
           "type": "number"
         },
         "estimated_age": {
@@ -4670,7 +4677,7 @@
           "minimum": 0
         },
         "gate": {
-          "description": "the age threshold, in years, that the widget checked the person against, for example 18",
+          "description": "the age-model head (12, 15, 18, 21 or 25) the widget checked the face with; required for a pass, and equal to the age_head that GET /verify/v1/requirements/check returned for this session (for example 21 on an 18 site at the Normal level); for a session with no stored age check strictness, a head at or above the session's minimum age",
           "type": "integer"
         },
         "inference_run_id": {
@@ -4711,7 +4718,7 @@
           "maxLength": 64
         },
         "verified": {
-          "description": "the widget's own result for gate: true when it judged the person to be at least gate years old",
+          "description": "the widget's own result for gate: true when it judged the person to be at least gate years old; required for a pass",
           "type": "boolean"
         },
         "widget_build": {
@@ -5055,6 +5062,14 @@
     "HandoffClaimDTO": {
       "type": "object",
       "properties": {
+        "age_head": {
+          "description": "the age-model head (12, 15, 18, 21 or 25) the browser age check must use, as GET /verify/v1/requirements/check returns it; absent when the server stored no head for the session (for example an ID verification, or a session whose age check moved to the document)",
+          "type": "integer"
+        },
+        "age_threshold": {
+          "description": "the lowest confidence that passes the browser age check of this session, above 0 and at most 1, as GET /verify/v1/requirements/check returns it; present exactly when age_head is present",
+          "type": "number"
+        },
         "api_key": {
           "description": "the publishable key the phone uses for the rest of its calls",
           "type": "string"
@@ -6119,6 +6134,10 @@
     },
     "createInitRequest": {
       "type": "object",
+      "required": [
+        "callback_url",
+        "user_id"
+      ],
       "properties": {
         "callback_url": {
           "type": "string"
@@ -6142,16 +6161,23 @@
           "type": "string"
         },
         "min_age": {
-          "description": "for age_verification: 12 to 25, rounded up to the next of 12, 15, 18, 21 or 25 (19 is enforced as 21); id_verification takes none (omit it or send 0)",
-          "type": "integer"
+          "description": "required for age_verification, the default purpose: 12 to 25, rounded up to the next of 12, 15, 18, 21 or 25 (19 is enforced as 21); id_verification takes none (omit it or send 0)",
+          "type": "integer",
+          "maximum": 25,
+          "minimum": 0
         },
         "mismatch_policy": {
           "description": "\"report\" (default) records the outcome only; \"review\" sends the session to your review queue on any mismatch",
           "type": "string"
         },
         "purpose": {
-          "description": "\"age_verification\" (default) or \"id_verification\"",
-          "type": "string"
+          "description": "\"age_verification\" (the default, also when omitted or empty) or \"id_verification\"",
+          "type": "string",
+          "enum": [
+            "",
+            "age_verification",
+            "id_verification"
+          ]
         },
         "success_url": {
           "type": "string"
@@ -6164,8 +6190,14 @@
           "type": "string"
         },
         "verification_mode": {
-          "description": "\"auto\" (default), \"document\" (an ID document and a face match are always required, no on-device age estimation) or \"facial\" (on-device only, never a document; refused with purpose id_verification); unlike purpose id_verification, it keeps min_age",
-          "type": "string"
+          "description": "\"auto\" (the default, also when omitted or empty), \"document\" (an ID document and a face match are always required, no on-device age estimation) or \"facial\" (on-device only, never a document; refused with purpose id_verification); unlike purpose id_verification, it keeps min_age",
+          "type": "string",
+          "enum": [
+            "",
+            "auto",
+            "document",
+            "facial"
+          ]
         }
       }
     },
