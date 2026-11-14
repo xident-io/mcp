@@ -243,7 +243,9 @@ function securityOf(op: RawOperation, spec: SwaggerSpec): Credential[][] | null 
       .sort(byApiKeyFirst)
       .map((scheme) => {
         // Own keys only: a scheme named "constructor" must not find Object.
-        const def = defs !== undefined && Object.hasOwn(defs, scheme) ? defs[scheme] : undefined;
+        // A null or non-object securityDefinitions gives no definition, never a throw.
+        const def =
+          defs !== null && typeof defs === "object" && Object.hasOwn(defs, scheme) ? defs[scheme] : undefined;
         const credential: Credential = { scheme };
         if (typeof def?.in === "string") credential.in = def.in;
         if (typeof def?.name === "string") credential.name = def.name;

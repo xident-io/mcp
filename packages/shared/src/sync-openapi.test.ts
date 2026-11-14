@@ -146,6 +146,14 @@ describe("syncOpenapi", () => {
       [opSecurity([{ ApiKeyAuth: [1] }]), /security of POST \/verify\/v1\/init/],
       [withTopSecurity([null]), /security of the spec \(top level\)/],
       [withTopSecurity({ ApiKeyAuth: [] }), /security of the spec \(top level\)/],
+      [
+        JSON.stringify({ swagger: "2.0", info: {}, securityDefinitions: null, paths: { "/verify/v1/init": {} } }),
+        /"securityDefinitions" is null, not an object/,
+      ],
+      [
+        JSON.stringify({ swagger: "2.0", info: {}, securityDefinitions: { ApiKeyAuth: null }, paths: { "/verify/v1/init": {} } }),
+        /security definition ApiKeyAuth is null, not an object/,
+      ],
     ];
     for (const [text, message] of cases) {
       const from = join(dir, "bad.json");

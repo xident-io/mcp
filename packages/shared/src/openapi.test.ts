@@ -148,6 +148,19 @@ describe("auth", () => {
     expect(optional.auth).toBe("api_key or none");
   });
 
+  it("does not throw, and names the scheme, when securityDefinitions is null or not an object", () => {
+    for (const defs of [null, 42, "x", []]) {
+      const raw = {
+        swagger: "2.0", info: {},
+        securityDefinitions: defs,
+        paths: { "/x": { get: { security: [{ ApiKeyAuth: [] }] } } },
+      } as never;
+      const ep = findEndpoint("/x", "get", raw)!;
+      expect(ep.auth, String(defs)).toBe("api_key");
+      expect(ep.security, String(defs)).toEqual([[{ scheme: "ApiKeyAuth" }]]);
+    }
+  });
+
   it("does not take an inherited Object property for a scheme's label or definition", () => {
     for (const name of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
       // JSON.parse, not an object literal: only JSON.parse makes "__proto__" an own key.

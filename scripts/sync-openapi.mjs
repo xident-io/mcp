@@ -99,6 +99,16 @@ export function validateSpec(text, source) {
     throw new Error(`${source} has internal paths (${internal.slice(0, 3).join(", ")}); use the public filter's output`);
   }
   if (spec.security !== undefined) checkSecurity(spec.security, "the spec (top level)", source);
+  if (spec.securityDefinitions !== undefined) {
+    if (!isObject(spec.securityDefinitions)) {
+      throw new Error(`${source}: "securityDefinitions" is ${kindOf(spec.securityDefinitions)}, not an object`);
+    }
+    for (const [name, def] of Object.entries(spec.securityDefinitions)) {
+      if (!isObject(def)) {
+        throw new Error(`${source}: security definition ${name} is ${kindOf(def)}, not an object`);
+      }
+    }
+  }
   for (const [path, item] of Object.entries(spec.paths)) {
     if (!isObject(item)) {
       throw new Error(`${source}: path ${path} is ${kindOf(item)}, not an object of operations`);
