@@ -87,7 +87,7 @@
     },
     "/oauth/authorize": {
       "get": {
-        "description": "Validates the request, checks for an existing consent, and redirects the user to the Xident consent screen.",
+        "description": "Validates the request and redirects the user to the Xident consent screen; every authorization code follows a consent screen. With the age_verification scope the client must have an age band (min_age), set in the dashboard: a client without one is refused with 400. The request carries no band, and a min_age query parameter is ignored.",
         "tags": [
           "OAuth"
         ],
@@ -160,7 +160,7 @@
     },
     "/oauth/consent/info": {
       "get": {
-        "description": "Returns consent session data (client name, logo, scopes, redirect URI) for the portal consent screen.",
+        "description": "Returns consent session data (client name, logo, scopes, redirect URI) for the portal consent screen. With the age_verification scope it also returns min_age, the client's age band the person is asked to share; a session with age_verification and no age band is refused like an expired one.",
         "produces": [
           "application/json"
         ],
@@ -440,7 +440,7 @@
             "OAuthBearerAuth": []
           }
         ],
-        "description": "Returns user claims based on the scopes granted to the access token. Requires a valid OAuth access token. A missing, invalid or expired token is refused with 401 and the standard error envelope (code UNAUTHORIZED), not the RFC 6749 error body; a valid token whose subject is not an account is refused with 401 and the RFC 6749 body (error invalid_token). A rate limit refusal (429) uses the envelope.",
+        "description": "Returns user claims based on the scopes granted to the access token. Requires a valid OAuth access token. With the age_verification scope the answer is about the client's age band only, the band the person consented to: age_verified (always present; false means Xident does not currently prove that band, not that the person is under age), verified_brackets ([\"+<band>\"], only when age_verified is true) and meets_threshold (one key, the band). A missing, invalid or expired token is refused with 401 and the standard error envelope (code UNAUTHORIZED), not the RFC 6749 error body; a valid token whose subject is not an account, or a token with age_verification and no age band, is refused with 401 and the RFC 6749 body (error invalid_token). A rate limit refusal (429) uses the envelope.",
         "produces": [
           "application/json"
         ],
@@ -456,7 +456,7 @@
             }
           },
           "401": {
-            "description": "missing, invalid or expired access token: the standard error envelope (code UNAUTHORIZED); a valid token whose subject is not an account: the RFC 6749 body (error invalid_token)",
+            "description": "missing, invalid or expired access token: the standard error envelope (code UNAUTHORIZED); a valid token whose subject is not an account, or with age_verification and no age band: the RFC 6749 body (error invalid_token)",
             "schema": {
               "$ref": "#/definitions/Envelope"
             }
@@ -1732,6 +1732,7 @@
             "ApiKeyAuth": []
           }
         ],
+        "description": "Creates an inactive account with an email only and sends an activation link. No verification session is linked: a `session_id` in the body is accepted and ignored.",
         "consumes": [
           "application/json"
         ],
@@ -1773,7 +1774,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Create a new Xident account with email and optional password. If session_id is provided, links the verification session to the new account. Returns JWT tokens.",
+        "description": "Create a new Xident account with email and optional password. The account starts inactive until the email is confirmed. No verification session is linked: a `token` in the body is accepted and ignored. An account's age comes only from its own ID verification in the portal.",
         "consumes": [
           "application/json"
         ],
@@ -1846,7 +1847,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Completes the session if the signed-in account already holds an unexpired age bracket satisfying the site's minimum age. Returns 409 when it does not, and the caller must run a normal verification.",
+        "description": "Completes the session when the signed-in account's age, computed now from the date of birth on its verified government document, reaches the session's minimum age band. Returns 409 account_bracket_insufficient when it does not, and 409 account_reuse_not_applicable for an ID verification, a session that asked for a data match, a session created before init tokens carried its settings, or a session for which a document was already submitted; the caller then runs a normal verification. A key reaches only sessions of its own mode: a session of the other mode answers 404 NOT_FOUND with the same body as an unknown token and is not changed, whether it is still open or already terminal.",
         "consumes": [
           "application/json"
         ],
@@ -2334,7 +2335,7 @@
             }
           },
           "404": {
-            "description": "no such session or OCR task for this API key's tenant",
+            "description": "no such session or OCR task for this API key's tenant, or a session of the other mode (a test key streams test sessions only; the OCR stream refuses test keys)",
             "schema": {
               "$ref": "#/definitions/Envelope"
             }
@@ -2528,7 +2529,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Exchange API key + verification params for a short-lived init token",
+        "description": "Exchange your server key and the verification settings for a short-lived init token and the verify_url to send the person to. Requires a server key (sk_live_, sk_test_, ak_live_, ak_test_ or an agent access token); a public key gets 403 SECRET_KEY_REQUIRED. user_id is required. min_age is 12 to 25 for age_verification and is rounded up to the next of 12, 15, 18, 21 or 25; id_verification takes no min_age and cannot be combined with verification_mode facial. The token lives 10 minutes. Every setting of the session comes from this token; nothing the browser sends can change it.",
         "consumes": [
           "application/json"
         ],
@@ -2548,6 +2549,12 @@
             "schema": {
               "$ref": "#/definitions/createInitRequest"
             }
+          },
+          {
+            "type": "string",
+            "description": "makes a retry return the same token for 10 minutes; the same key with a different body gets 422 IDEMPOTENCY_KEY_MISMATCH",
+            "name": "Idempotency-Key",
+            "in": "header"
           },
           {
             "$ref": "#/parameters/XApiVersion"
@@ -2574,6 +2581,30 @@
           },
           "400": {
             "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
             "schema": {
               "$ref": "#/definitions/Envelope"
             }
@@ -2776,13 +2807,19 @@
             }
           },
           "400": {
-            "description": "Bad Request",
+            "description": "MISSING_SESSION (no verification_session_id), DOCUMENT_NOT_ACCEPTED (the session has no document step, or is a test session), SESSION_TERMINAL, MISSING_DOCUMENT_TYPE, MISSING_FILES, MISSING_DOCUMENT_FRONT, INVALID_FILE_TYPE or INVALID_PRESIGN_REQUEST",
             "schema": {
               "$ref": "#/definitions/Envelope"
             }
           },
           "401": {
             "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "402": {
+            "description": "Payment Required",
             "schema": {
               "$ref": "#/definitions/Envelope"
             }
@@ -2803,7 +2840,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Returns the current status of an OCR processing task, including results when complete.",
+        "description": "Returns the current status of an OCR processing task, including results when complete. A result is shown only once the task's verification session holds the document check's decision: while the session is still open the status stays `processing`, and when the session ended without that decision (canceled, expired, retaken) the status is `failed` with error `session_closed` and no result.",
         "produces": [
           "application/json"
         ],
@@ -2891,13 +2928,19 @@
             }
           },
           "400": {
-            "description": "Bad Request",
+            "description": "MISSING_SESSION (the task was presigned without a verification session), DOCUMENT_NOT_ACCEPTED (the session has no document step, or is a test session), DOCUMENT_ALREADY_SUBMITTED (the session already has a document; one session takes one), SESSION_TERMINAL (the session is closed or past its expiry), MISSING_TOKEN, INVALID_REQUEST or INVALID_VIDEO_GUIDE",
             "schema": {
               "$ref": "#/definitions/Envelope"
             }
           },
           "401": {
             "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "402": {
+            "description": "Payment Required",
             "schema": {
               "$ref": "#/definitions/Envelope"
             }
@@ -2997,6 +3040,12 @@
             "schema": {
               "$ref": "#/definitions/Envelope"
             }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
           }
         }
       }
@@ -3008,7 +3057,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Determines which verification methods are required using the authenticated API key.",
+        "description": "Creates the verification session from an init token with your server key (sk_live_, sk_test_, ak_live_, ak_test_ or an agent access token) and returns the methods it requires; a public key gets 403 SECRET_KEY_REQUIRED. Send the init token in the X-Init-Token header; it must belong to the project of the key. Every setting of the session comes from that token; query parameters are not read. A test key makes a test session. Without the header: 400 MISSING_INIT_TOKEN. Unknown or expired token: 404. Token of another project: 400 INIT_TOKEN_KEY_MISMATCH. A credential whose mode differs from its project's: 403 KEY_MODE_MISMATCH.",
         "produces": [
           "application/json"
         ],
@@ -3019,66 +3068,13 @@
         "parameters": [
           {
             "type": "string",
-            "description": "expected_ref from the redeemed init token (data match): links the identity data the site owner sent as expected to the new session",
-            "name": "expected_ref",
-            "in": "query"
-          },
-          {
-            "$ref": "#/parameters/XApiVersion"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/Envelope"
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "schema": {
-              "$ref": "#/definitions/Envelope"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "$ref": "#/definitions/Envelope"
-            }
-          }
-        }
-      }
-    },
-    "/verify/v1/requirements/check": {
-      "get": {
-        "description": "Determines which verification methods are required based on your public key and the user's location. Send your public key (pk_live_ or pk_test_) in the X-API-Key header; a secret key is refused with 401.",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "SDK"
-        ],
-        "summary": "Check verification requirements (public)",
-        "parameters": [
-          {
-            "type": "string",
-            "description": "your public key (pk_live_ or pk_test_); this endpoint reads only this header, not Authorization: Bearer",
-            "name": "X-API-Key",
+            "description": "the init token (xit_...) that POST /verify/v1/init returned; the session's settings come from it",
+            "name": "X-Init-Token",
             "in": "header",
             "required": true
           },
           {
-            "type": "string",
-            "description": "External user ID for retry tracking",
-            "name": "user_id",
-            "in": "query",
-            "required": true
-          },
-          {
-            "type": "string",
-            "description": "expected_ref from the redeemed init token (data match): links the identity data the site owner sent as expected to the new session",
-            "name": "expected_ref",
-            "in": "query"
+            "$ref": "#/parameters/XApiVersion"
           }
         ],
         "responses": {
@@ -3100,8 +3096,92 @@
               "$ref": "#/definitions/Envelope"
             }
           },
+          "403": {
+            "description": "Forbidden",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
           "500": {
             "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          }
+        }
+      }
+    },
+    "/verify/v1/requirements/check": {
+      "get": {
+        "description": "Creates the verification session from an init token and returns the methods it requires. Send your public key (pk_live_ or pk_test_) in the X-API-Key header; a secret key is refused with 401. Send the init token from the verify_url (?t=xit_...) in the X-Init-Token header; it must belong to the same project. Every setting of the session (minimum age, purpose, verification mode, user id, liveness difficulty, locale, theme, data match) comes from that token; query parameters are not read. Without the header: 400 MISSING_INIT_TOKEN. Unknown or expired token: 404. Token of another project: 400 INIT_TOKEN_KEY_MISMATCH. When the account may not start a new session no session is created: 402 ALLOWANCE_EXHAUSTED (included Checks used up), 402 BUDGET_EXCEEDED (the monthly budget set as a hard stop is reached) or 402 PAYMENT_REQUIRED (account suspended); 503 when the account status cannot be read.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "SDK"
+        ],
+        "summary": "Check verification requirements (public)",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "your public key (pk_live_ or pk_test_); this endpoint reads only this header, not Authorization: Bearer",
+            "name": "X-API-Key",
+            "in": "header",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "the init token (xit_...) that POST /verify/v1/init returned with your server key; the session's settings come from it",
+            "name": "X-Init-Token",
+            "in": "header",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "schema": {
               "$ref": "#/definitions/Envelope"
             }
@@ -3116,7 +3196,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Returns the verification verdict for a session, as the site owner's secret key sees it. `status` is a VERDICT, not a lifecycle marker: `success` means the user PASSED. A session that ran to the end of the flow but missed the age threshold is `failed`, with `reason` explaining why. Possible `status` values: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken`. Linking a portal account (Xident ID) to a passed verification does not change its status: it stays `success`. `external_user_id` echoes the `user_id` supplied at init so the session can be correlated to your own user server-side \u2014 do not correlate on the browser callback, which is unsigned. Requires a server-side credential: a secret key (`sk_live_` or `sk_test_`), an agent key (`ak_live_` or `ak_test_`), or an agent OAuth access token (`xat_`). An agent key or access token needs the `verification:read` scope. A public key gets 403 SECRET_KEY_REQUIRED. This is the ONE tenant-facing shape: identical regardless of caller, and mirrored verbatim into every webhook's `data` field.",
+        "description": "Returns the verification verdict for a session, as the site owner's secret key sees it. `status` is a VERDICT, not a lifecycle marker: `success` means the user PASSED. A session that ran to the end of the flow but missed the age threshold is `failed`, with `reason` explaining why. Possible `status` values: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken`. Linking a portal account (Xident ID) to a passed verification does not change its status: it stays `success`. `external_user_id` echoes the `user_id` supplied at init so the session can be correlated to your own user server-side \u2014 do not correlate on the browser callback, which is unsigned. Requires a server-side credential: a secret key (`sk_live_` or `sk_test_`), an agent key (`ak_live_` or `ak_test_`), or an agent OAuth access token (`xat_`). An agent key or access token needs the `verification:read` scope. A public key gets 403 SECRET_KEY_REQUIRED. A key reads only sessions of its own mode: a test key (`sk_test_`, `ak_test_`) reads test sessions, a live credential reads live sessions, and a token of the other mode answers 404 NOT_FOUND with the same body as an unknown token. This is the ONE tenant-facing shape: identical regardless of caller, and mirrored verbatim into every webhook's `data` field.",
         "produces": [
           "application/json"
         ],
@@ -3316,7 +3396,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Marks a session as completed or failed. Records usage event and dispatches webhook.",
+        "description": "Marks a session as completed or failed. Records usage event and dispatches webhook. A key reaches only sessions of its own mode: a test key (`pk_test_`, `sk_test_`) a test session, a live key a live session. A session of the other mode answers 404 NOT_FOUND with the same body as an unknown token and is not changed, whether it is still open or already terminal.",
         "consumes": [
           "application/json"
         ],
@@ -3389,7 +3469,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Deletes all S3 files associated with a verification session (e.g., when user declines consent).",
+        "description": "Erases every stored file of a verification session: the document photos, selfies and tilt video of every document attempt, every stored version. It also erases the files of every retake session created from this session that exists when the call runs (not the session it was retaken from); a retake created after the call keeps its own new uploads until a later call erases them. Answers `deleted: true` only when a listing of the storage finds nothing left, also when the session never stored a file. Requires a secret key (`sk_live_` or `sk_test_`); a public key gets 403 SECRET_KEY_REQUIRED, an agent key or token 403 AGENT_KEY_FORBIDDEN, and a key reaches only sessions of its own mode (404 otherwise). 503: storage is not reachable, or files are still listed; retry. A file uploaded after this call with an upload link issued before it (links last 15 minutes) is deleted within 24 hours of the upload link's creation. This call does not end the session: if the person declined, end the session first (`PATCH /verify/v1/sessions/{id}/complete` with status `canceled`), because an open session can still receive uploads; those are also deleted within 24 hours of their upload link's creation. A session whose document is still being checked or waiting for a review when its files are deleted never passes: where it would have passed, it fails with reason `files_erased` and keeps no face template. The same holds for a document submitted to the session after this call. The verification result and the face template are not files and are not deleted here.",
         "produces": [
           "application/json"
         ],
@@ -3428,6 +3508,12 @@
               "$ref": "#/definitions/Envelope"
             }
           },
+          "403": {
+            "description": "Forbidden",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
           "404": {
             "description": "Not Found",
             "schema": {
@@ -3436,6 +3522,12 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/Envelope"
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "schema": {
               "$ref": "#/definitions/Envelope"
             }
@@ -3736,7 +3828,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Starts a new attempt linked to the given session: returns a new session token in the same retake chain, and the widget restarts capture against it. Refused with 409 RETAKE_NOT_ALLOWED when the session's status is success, canceled or retaken, or when it is a test session; every other status can be retaken. Refused with 409 RETAKE_LIMIT_EXCEEDED after 3 retakes in one chain.",
+        "description": "Starts a new attempt linked to the given session: returns a new session token in the same retake chain, and the widget restarts capture against it. Refused with 409 RETAKE_NOT_ALLOWED when the session's status is success, canceled or retaken, or when it is a test session, or when the tenant's current plan has no document path and the session's document step is mandatory (an ID verification, or a list that holds \"ocr\"); every other status can be retaken. On such a plan an optional document step (ocr_fallback) is not copied to the retake. Refused with 409 RETAKE_LIMIT_EXCEEDED after 3 retakes in one chain.",
         "consumes": [
           "application/json"
         ],
@@ -3800,7 +3892,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Returns the widget-facing verdict for a session \u2014 no per-check detail, no age gate, no document/country data, and a masked failure reason. `status` uses the same public vocabulary as /verify/v1/result/{token}: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken`. Linking a portal account to a passed verification does not change its status: it stays `success`. This is the ONE subject-facing shape: it does not vary by which key type authenticated the request (public or secret both get it), because a credential-dependent response shape is exactly what this endpoint is designed NOT to have.",
+        "description": "Returns the widget-facing verdict for a session \u2014 no per-check detail, no age gate, no document/country data, and a masked failure reason. `status` uses the same public vocabulary as /verify/v1/result/{token}: `pending`, `in_progress`, `success`, `failed`, `canceled` (single L), `expired`, `pending_tenant_review`, `awaiting_retake`, `retaken`. Linking a portal account to a passed verification does not change its status: it stays `success`. This is the ONE subject-facing shape: it does not vary by which key type authenticated the request (public or secret both get it), because a credential-dependent response shape is exactly what this endpoint is designed NOT to have. A key reads only sessions of its own mode (`pk_test_` and `sk_test_` read test sessions, `pk_live_` and `sk_live_` live sessions); a token of the other mode answers 404 NOT_FOUND, the same body as an unknown token.",
         "produces": [
           "application/json"
         ],
@@ -4145,7 +4237,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Issues a verification token for the authenticated account's verified age bracket. The embedding site can later use this token to check the user's age without re-verification. Requires account JWT via X-Account-Token header and API key context.",
+        "description": "Issues a verification token for the authenticated account's verified age bracket. The embedding site can later use this token to check the user's age without re-verification. age_bracket is 12 to 25 and is rounded up to the next of 12, 15, 18, 21 or 25 (400 INVALID_MIN_AGE otherwise); the token holds that band, and is issued only when the account's age from its government-document date of birth reaches it (403 otherwise). Requires account JWT via X-Account-Token header and API key context.",
         "consumes": [
           "application/json"
         ],
@@ -4284,7 +4376,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "description": "Validates a verification token and returns whether it is valid, the age bracket, verification method, and expiration. Invalid, expired, or revoked tokens return valid=false without error. Requires API key auth.",
+        "description": "Validates a verification token and returns whether it is valid, the age bracket, verification method, and expiration. Invalid, expired, or revoked tokens return valid=false without error, and so does a token whose band the account's age, from its government-document date of birth, no longer reaches. Requires API key auth.",
         "consumes": [
           "application/json"
         ],
@@ -4428,7 +4520,7 @@
     {
       "name": "SDK 2FA",
       "x-displayName": "Face 2FA",
-      "description": "Server-side biometric second factor: enrol a user's face, verify against it, and hard-delete the enrolment on request. Billed at the Verification rate."
+      "description": "Server-side biometric second factor: enrol a user's face, verify against it, and hard-delete the enrolment on request. Each decided verify bills as one Check."
     },
     {
       "name": "Verify Optical",
@@ -5012,7 +5104,7 @@
           "type": "string"
         },
         "expected_ref": {
-          "description": "opaque one-time reference to the identity data the site owner sent as expected; pass it as the expected_ref query parameter of GET /verify/v1/requirements/check, which links that data to the new session",
+          "description": "opaque reference to the identity data the site owner sent as expected; the server links it to the session it creates from this token, so it needs no handling",
           "type": "string"
         },
         "failed_url": {
@@ -5268,7 +5360,8 @@
       "type": "object",
       "required": [
         "document_type",
-        "files"
+        "files",
+        "verification_session_id"
       ],
       "properties": {
         "capture_proof_token": {
@@ -5286,6 +5379,7 @@
           }
         },
         "verification_session_id": {
+          "description": "required: the verification session the document belongs to; without it the answer is 400 MISSING_SESSION",
           "type": "string"
         }
       }
@@ -5621,6 +5715,7 @@
       "type": "object",
       "properties": {
         "age_verified": {
+          "description": "with age_verification: always present, about the access token's band only",
           "type": "boolean"
         },
         "display_name": {
@@ -5893,6 +5988,7 @@
           "type": "string"
         },
         "token": {
+          "description": "Accepted for older clients and ignored. Registration links no verification session.",
           "type": "string"
         }
       }
@@ -6039,12 +6135,14 @@
           "type": "string"
         },
         "liveness_difficulty": {
+          "description": "\"easy\" (default), \"medium\" or \"hard\"; any other value is refused with 400 INVALID_LIVENESS_DIFFICULTY",
           "type": "string"
         },
         "locale": {
           "type": "string"
         },
         "min_age": {
+          "description": "for age_verification: 12 to 25, rounded up to the next of 12, 15, 18, 21 or 25 (19 is enforced as 21); id_verification takes none (omit it or send 0)",
           "type": "integer"
         },
         "mismatch_policy": {
@@ -6062,10 +6160,11 @@
           "type": "string"
         },
         "user_id": {
+          "description": "required: your own identifier for the person being verified; it is echoed back in results",
           "type": "string"
         },
         "verification_mode": {
-          "description": "\"auto\" (default), \"document\" (an ID document and a face match are always required, no on-device age estimation) or \"facial\" (on-device only, never a document); unlike purpose id_verification, it keeps min_age",
+          "description": "\"auto\" (default), \"document\" (an ID document and a face match are always required, no on-device age estimation) or \"facial\" (on-device only, never a document; refused with purpose id_verification); unlike purpose id_verification, it keeps min_age",
           "type": "string"
         }
       }
@@ -6134,6 +6233,7 @@
           "type": "string"
         },
         "session_id": {
+          "description": "Accepted for older clients and ignored. Registration links no verification session.",
           "type": "string"
         }
       }
@@ -6288,7 +6388,7 @@
       "in": "header",
       "type": "string",
       "required": false,
-      "description": "Dated API version, e.g. 2026-08-13. Overrides the version pinned to the API key for this request only; omit it to use the pin. The response echoes the version it was served under in this same header and in meta.api_version, except when the request is refused before its version is resolved: a missing or invalid API key (401), a failed API key lookup (500), a rate limit (429), a body whose declared Content-Length is over 10 MB (413 PAYLOAD_TOO_LARGE) or an invalid X-API-Version (400 INVALID_API_VERSION). See https://docs.xident.io/api-versioning"
+      "description": "Dated API version, e.g. 2026-08-13. Overrides the version pinned to the API key for this request only; omit it to use the pin. The response echoes the version it was served under in this same header and in meta.api_version, except when the request is refused before its version is resolved: a missing or invalid API key (401), a failed API key lookup (500), a rate limit (429), a body whose declared Content-Length is over 10 MB (413 PAYLOAD_TOO_LARGE) or an invalid X-API-Version (400 INVALID_API_VERSION). See https://docs.xident.io/api-versioning/"
     }
   }
 }

@@ -125,32 +125,24 @@
       "type": "object",
       "properties": {
         "min_age": {
-          "description": "Age gate to test, e.g. 18",
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 120
+          "description": "Required for age_verification: a whole number from 12 to 25. Xident rounds it up to the next of 12, 15, 18, 21 or 25 and enforces that band, so 19 is enforced as 21. An id_verification takes no age: leave it out or send 0. Any other value is refused with INVALID_MIN_AGE.",
+          "type": "number"
         },
         "purpose": {
-          "description": "Default age_verification",
-          "type": "string",
-          "enum": [
-            "age_verification",
-            "id_verification"
-          ]
+          "description": "One of: age_verification (default) or id_verification. An id_verification always needs a document and a face match, and takes no min_age. Any other value is refused with INVALID_PURPOSE.",
+          "type": "string"
         },
         "verification_mode": {
-          "description": "auto (default), document (forces ID + face match), facial (on-device only)",
-          "type": "string",
-          "enum": [
-            "auto",
-            "document",
-            "facial"
-          ]
+          "description": "One of: auto (default), document (an ID document and a face match are always required), or facial (on-device only, never a document). facial cannot be combined with purpose id_verification, which always needs a document. Any other value is refused with INVALID_VERIFICATION_MODE.",
+          "type": "string"
         },
         "callback_url": {
-          "description": "Where the widget returns the user",
-          "type": "string",
-          "format": "uri"
+          "description": "REQUIRED. Where the widget returns the person after the flow: HTTPS, or http://localhost in development. A missing one is refused with MISSING_CALLBACK_URL.",
+          "type": "string"
+        },
+        "user_id": {
+          "description": "Your identifier for the test person. It comes back on the callback and in the result. Leave it out and the tool generates mcp-dev-<random>. End it with +fail to make the test session fail.",
+          "type": "string"
         },
         "locale": {
           "description": "BCP-47 locale, e.g. de-DE",
@@ -177,6 +169,18 @@
           "type": "string",
           "minLength": 1,
           "description": "The verification token, e.g. xtk_..."
+        },
+        "expected_user_id": {
+          "description": "Optional, with required_min_age: the user your backend started this verification for. The tool then adds `access` with proves_age, same_user, test and granted.",
+          "type": "string"
+        },
+        "required_min_age": {
+          "description": "Optional, with expected_user_id: the minimum age your backend requires, a whole number from 12 to 25.",
+          "type": "number"
+        },
+        "allow_test_results": {
+          "description": "Optional, development only: count a test-key verdict (test: true) in `access`. A production backend never accepts one. Default false.",
+          "type": "boolean"
         }
       },
       "required": [

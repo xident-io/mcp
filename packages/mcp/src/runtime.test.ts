@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { XidentClient } from "@xident/mcp-shared";
 import { configFromEnv, DEFAULTS } from "./config.js";
 import { bearerFrom, effectiveScopes, resolveToken } from "./auth.js";
 import { challengeHeader, protectedResourceMetadata, SUPPORTED_SCOPES } from "./prm.js";
@@ -170,5 +172,118 @@ describe("effectiveScopes", () => {
   it("gives a scoped credential only what it holds", () => {
     const scopes = effectiveScopes({ ok: true, scopes: ["blacklist:read"], unrestricted: false }, SUPPORTED_SCOPES);
     expect(toolsForScopes(scopes).map((t) => t.name)).toEqual(["xident_list_blacklist"]);
+  });
+});
+
+describe("xident_start_verification settings (api PR #44)", () => {
+  const start = RUNTIME_TOOLS.find((t) => t.name === "xident_start_verification")!;
+  const schema = z.object(start.inputSchema);
+  const valid = {
+    callback_url: "https://example.com/done",
+    user_id: "u-1",
+    min_age: 18,
+    idempotency_key: "k-1",
+  };
+
+  function jsonRes(status: number, body: unknown): Response {
+    return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  }
+  function clientWith(f: ReturnType<typeof vi.fn>): XidentClient {
+    return new XidentClient({ baseUrl: "https://api.test", apiKey: "xat_1", fetchImpl: f as never });
+  }
+
+  it("publishes the settings fields with types only, so the handler sees every value", () => {
+    // A strict schema makes the MCP SDK refuse with its own text before the
+    // handler runs, which hid MISSING_USER_ID and INVALID_MIN_AGE from a real
+    // tools/call (Astra finding 3). Fails if a bound, an enum or a required
+    // flag comes back on these fields.
+    for (const field of ["user_id", "callback_url", "min_age", "purpose", "verification_mode"]) {
+      expect(start.inputSchema[field]!.isOptional(), field).toBe(true);
+    }
+    const { user_id: _omit, ...withoutUser } = valid;
+    expect(schema.safeParse(withoutUser).success).toBe(true);
+    for (const minAge of [0, 11, 26, 99, 18.5]) {
+      expect(schema.safeParse({ ...valid, min_age: minAge }).success, String(minAge)).toBe(true);
+    }
+    expect(schema.safeParse({ ...valid, verification_mode: "manual", purpose: "kyc" }).success).toBe(true);
+    // The tool's own rule stays in the schema.
+    const { idempotency_key: _k, ...withoutKey } = valid;
+    expect(schema.safeParse(withoutKey).success).toBe(false);
+  });
+
+  it("says in the descriptions which fields are required", () => {
+    expect(start.inputSchema["user_id"]!.description ?? "").toMatch(/^REQUIRED\./);
+    expect(start.inputSchema["callback_url"]!.description ?? "").toMatch(/^REQUIRED\./);
+    expect(start.inputSchema["user_id"]!.description ?? "").toContain("MISSING_USER_ID");
+  });
+
+  it("explains the band rounding and the id_verification rule to the agent", () => {
+    const d = start.inputSchema["min_age"]!.description ?? "";
+    expect(d).toContain("12 to 25");
+    expect(d).toContain("19 is enforced as 21");
+    expect(d).toContain("id_verification");
+    expect(start.inputSchema["verification_mode"]!.description ?? "").toContain("facial cannot be combined");
+  });
+
+  it("sends the age as given, with the user_id, to POST /verify/v1/init", async () => {
+    // Fails if the tool rounds locally, drops user_id, or changes the path.
+    const f = vi.fn(async () => jsonRes(201, { success: true, data: { token: "xit_1", verify_url: "https://v/x" } }));
+    const out = await start.handler({ ...valid, min_age: 19 }, clientWith(f));
+    expect(out).toMatchObject({ token: "xit_1" });
+    expect(f.mock.calls[0]![0]).toBe("https://api.test/verify/v1/init");
+    const init = f.mock.calls[0]![1] as RequestInit;
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({
+      min_age: 19, callback_url: "https://example.com/done", user_id: "u-1",
+    });
+  });
+
+  it("sends purpose and verification_mode as given", async () => {
+    // Fails if either is dropped after the check (Astra finding 4): the API
+    // would then make an age session, or use the rule's default mode.
+    const f = vi.fn(async () => jsonRes(201, { success: true, data: { token: "xit_3" } }));
+    await start.handler({ ...valid, min_age: 21, purpose: "age_verification", verification_mode: "document" }, clientWith(f));
+    expect(JSON.parse(String((f.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      min_age: 21, purpose: "age_verification", verification_mode: "document",
+      callback_url: "https://example.com/done", user_id: "u-1",
+    });
+  });
+
+  it.each([
+    ["a blank user_id", { ...valid, user_id: "   " }, "MISSING_USER_ID"],
+    ["an age verification with no min_age", { ...valid, min_age: undefined }, "INVALID_MIN_AGE"],
+    ["an id verification with min_age 18", { ...valid, purpose: "id_verification" }, "INVALID_MIN_AGE"],
+    ["an id verification with facial",
+      { ...valid, min_age: undefined, purpose: "id_verification", verification_mode: "facial" },
+      "INVALID_VERIFICATION_MODE"],
+  ])("refuses %s without a request", async (_label, args, code) => {
+    // Fails if the handler stops calling checkInitArgs before the request.
+    const f = vi.fn(async () => jsonRes(201, {}));
+    const out = await start.handler(args as Record<string, unknown>, clientWith(f)) as Record<string, unknown>;
+    expect(out).toMatchObject({ error: true, status: 400, code });
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("lets an id verification with document through, purpose and mode intact", async () => {
+    // Fails if purpose or verification_mode is dropped from the body after
+    // the check, or if an age is added (Astra finding 4).
+    const f = vi.fn(async () => jsonRes(201, { success: true, data: { token: "xit_2" } }));
+    await start.handler(
+      { ...valid, min_age: undefined, purpose: "id_verification", verification_mode: "document" }, clientWith(f));
+    expect(f).toHaveBeenCalledTimes(1);
+    expect(f.mock.calls[0]![0]).toBe("https://api.test/verify/v1/init");
+    expect(JSON.parse(String((f.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      purpose: "id_verification", verification_mode: "document",
+      callback_url: "https://example.com/done", user_id: "u-1",
+    });
+  });
+
+  it("lets an id verification with min_age 0 through, as the API accepts it", async () => {
+    // Fails if the tool refuses the 0 the API accepts (Astra finding 2).
+    const f = vi.fn(async () => jsonRes(201, { success: true, data: { token: "xit_4" } }));
+    await start.handler({ ...valid, min_age: 0, purpose: "id_verification" }, clientWith(f));
+    expect(JSON.parse(String((f.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      min_age: 0, purpose: "id_verification", callback_url: "https://example.com/done", user_id: "u-1",
+    });
   });
 });

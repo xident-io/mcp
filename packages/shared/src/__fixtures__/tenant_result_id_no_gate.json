@@ -1,0 +1,42 @@
+{
+  "token": "xtk_golden0002",
+  "status": "success",
+  "verified": true,
+  "verification_type": "full",
+  "ip_country": "DE",
+  "external_user_id": "cust-4711",
+  "checks": {
+    "liveness": {
+      "performed": true,
+      "passed": true
+    },
+    "age": {
+      "performed": true,
+      "passed": true
+    },
+    "document": {
+      "performed": true,
+      "passed": true,
+      "document_type": "passport",
+      "country": "DE"
+    },
+    "face_match": {
+      "performed": true,
+      "passed": true
+    },
+    "eu_wallet": {
+      "performed": false,
+      "passed": false
+    },
+    "aml": {
+      "performed": false,
+      "passed": false
+    }
+  },
+  "risk": {
+    "band": "low"
+  },
+  "created_at": "2026-08-03T10:00:00Z",
+  "completed_at": "2026-08-03T10:02:30Z",
+  "expires_at": "2026-08-03T10:15:00Z"
+}

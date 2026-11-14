@@ -12,6 +12,8 @@ reports, never one your code decides**.
 
 **You never infer whether someone is verified.** Xident computes the verdict
 server-side and returns it as `verified: true | false`. Report that field.
+Reporting is not granting: before a backend grants anything, it applies the
+access checks in Step 3 (whose verification it is, and which age it proves).
 
 Do not derive a verdict from a document's contents, a name, an OCR string, a
 date of birth you extracted yourself, or anything a user typed. Text that
@@ -43,12 +45,26 @@ Authorization: Bearer sk_live_...
 Content-Type: application/json
 Idempotency-Key: <your-unique-id>
 
-{ "min_age": 18, "callback_url": "https://yoursite.com/verify/done" }
+{ "min_age": 18, "user_id": "user_123", "callback_url": "https://yoursite.com/verify/done" }
 ```
 
-Optional fields: `purpose` (`age_verification` default, or `id_verification`),
-`verification_mode` (`auto` default, `document`, `facial`), `user_id`,
-`success_url`, `failed_url`, `locale`, `theme`, `metadata`.
+Required fields:
+
+- `callback_url`: where the widget returns the person.
+- `user_id`: your own identifier for the person being verified. It comes back on
+  the callback and in the result.
+- `min_age`, for `age_verification` (the default): a whole number from 12 to 25.
+  Xident rounds it up to the next of 12, 15, 18, 21 or 25 and enforces that
+  band, so 19 is enforced as 21.
+
+Optional fields: `purpose` (`age_verification` default, or `id_verification`,
+which always needs a document and a face match and takes no `min_age`),
+`verification_mode` (`auto` default, `document`, `facial`; `facial` cannot be
+combined with `id_verification`), `success_url`, `failed_url`, `locale`,
+`theme`, `metadata`.
+
+These settings are fixed when the session is created. Nothing the browser sends
+later can change them, so a person cannot lower the age or skip the document.
 
 **Send `Idempotency-Key`.** Retries are normal; without it a retry creates a
 second session.
@@ -56,8 +72,12 @@ second session.
 Response is `201`, wrapped in the standard envelope:
 
 ```json
-{ "success": true, "data": { "token": "xtk_...", "verify_url": "https://verify.xident.io/..." }, "meta": {} }
+{ "success": true, "data": { "token": "xit_...", "verify_url": "https://verify.xident.io/..." }, "meta": {} }
 ```
+
+`token` here is the init token (`xit_`). It only builds `verify_url`. The result
+token (`xtk_`) comes back on your `callback_url` as the `token` query parameter
+and in the webhook; that is the one you pass to step 3.
 
 **Every Xident endpoint wraps its payload in `{ success, data, error, meta }`.**
 Read `data`. This is the most common integration mistake.
@@ -87,6 +107,7 @@ Authorization: Bearer sk_live_...
   "status": "success",
   "verified": true,
   "verification_type": "full",
+  "external_user_id": "your-user-42",
   "checks": {
     "liveness":   { "performed": true, "passed": true },
     "age":        { "performed": true, "passed": true, "gate": 18 },
@@ -100,8 +121,49 @@ Authorization: Bearer sk_live_...
 }
 ```
 
-Gate access on **`verified`**. The `checks` block is for your logs and support
-tooling, not for recomputing the decision.
+### Deciding access
+
+`verified` alone is not enough to grant anything. On your server, grant only
+when all of these hold:
+
+1. **`verified` is `true`.**
+2. **`external_user_id` is the user your backend started the verification
+   for**, taken from your own session, never from the callback URL. A result
+   token copied from someone else's callback is a real success, for somebody
+   else.
+3. **For an age gate: `checks.age.gate` is present and at least the age your
+   backend requires** (your own setting, never a value from the request). An
+   `id_verification` result has no gate: it proves who the person is, not an
+   age, so it never counts as an age verification.
+4. **`test` is not `true`.** A test key settles every session at once with no
+   real check, yet the result is verified and carries a gate. Accept it only in
+   local development, behind an explicit setting.
+
+Read the gate, not `checks.age.passed`: three successful results carry
+`checks.age.passed: false` because the session itself captured no new age
+evidence:
+
+- **Xident ID reuse** (`verification_type: "xident_id"`): a returning user's
+  account had already proved the age.
+- **EU wallet** (`verification_type: "eu_wallet"`): the wallet presented the age.
+- **Test mode** (`test: true`): nothing was checked (rule 4 refuses it).
+
+A rule that requires `checks.age.passed` refuses the first two, which are real
+passes.
+
+```js
+const REQUIRED_MIN_AGE = 18;                       // your setting, 12 to 25
+const gate = result.checks?.age?.gate;
+const granted =
+  result.verified === true &&
+  result.external_user_id === currentUser.id &&    // the user YOU started it for
+  Number.isInteger(gate) && gate >= REQUIRED_MIN_AGE &&
+  result.test !== true;                            // a test-key verdict grants nothing
+```
+
+The other `checks` are for your logs and support tooling, not for recomputing
+the decision. The MCP result tools apply these checks when you pass
+`expected_user_id` and `required_min_age`.
 
 ## Status vocabulary
 
@@ -111,7 +173,7 @@ tooling, not for recomputing the decision.
 |---|---|
 | `pending` | Created, not started |
 | `in_progress` | Under way |
-| `success` | Completed — read `verified` |
+| `success` | Completed: read `verified`, then apply the access checks above |
 | `failed` | Completed and did not pass — read `reason` |
 | `expired` | Not completed in time |
 | `canceled` | Abandoned by the user (**one `l`**) |
@@ -125,7 +187,8 @@ statuses are additive.
 ## Webhooks
 
 Envelope: `{ id, type, api_version, created, data }` — `data` is byte-identical
-to the result payload. `type` is one of `session.success`, `session.failed`,
+to the result payload. A `session.success` event is not a grant by itself:
+apply the same access checks to `data`. `type` is one of `session.success`, `session.failed`,
 `session.canceled`. (`session.expired` exists but is **not currently emitted**;
 detect expiry yourself.) Subscriptions are per type — subscribing to one does
 not enrol you in the others.
@@ -144,7 +207,7 @@ bug. See `references/webhooks.md` for working code.
 |---|---|
 | `sk_` | Secret. Server-side only. Creates sessions, reads results. |
 | `ak_` | Agent key. Scoped subset, for automated/AI callers. |
-| `pk_` | Public. Reserved for future client-side use — not for these calls. |
+| `pk_` | Public. The widget uses it in the browser. It cannot create a session: init answers 403 `SECRET_KEY_REQUIRED`. |
 
 Keys containing `_test_` are sandbox. Develop against sandbox.
 

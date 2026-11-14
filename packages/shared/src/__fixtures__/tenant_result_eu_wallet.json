@@ -1,0 +1,39 @@
+{
+  "token": "xtk_golden0004",
+  "status": "success",
+  "verified": true,
+  "reason": "all_methods_verified",
+  "verification_type": "eu_wallet",
+  "ip_country": "DE",
+  "external_user_id": "cust-4711",
+  "checks": {
+    "liveness": {
+      "performed": false,
+      "passed": false
+    },
+    "age": {
+      "performed": false,
+      "passed": false,
+      "gate": 21
+    },
+    "document": {
+      "performed": false,
+      "passed": false
+    },
+    "face_match": {
+      "performed": false,
+      "passed": false
+    },
+    "eu_wallet": {
+      "performed": true,
+      "passed": true
+    },
+    "aml": {
+      "performed": false,
+      "passed": false
+    }
+  },
+  "created_at": "2026-08-03T10:00:00Z",
+  "completed_at": "2026-08-03T10:01:10Z",
+  "expires_at": "2026-08-03T10:15:00Z"
+}

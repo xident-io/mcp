@@ -412,3 +412,80 @@ describe("allEndpoints", () => {
     }
   });
 });
+
+/**
+ * The bundled spec is what xident_get_endpoint and xident_search_docs serve.
+ * It used to describe the old init rules: no required user_id, any age, and
+ * settings in the URL of /requirements/check, so an agent that followed it
+ * got MISSING_USER_ID or MISSING_INIT_TOKEN from the API (Astra finding 1).
+ * These pin the rules of api PR #44 so the drift cannot come back unnoticed.
+ */
+describe("bundled spec: the init and requirements rules of api PR #44", () => {
+  type Schema = { required?: string[]; properties: Record<string, Record<string, unknown>> };
+  type Param = { name: string; in: string; required?: boolean; schema?: Schema };
+
+  function bodySchema(path: string, method: string): Schema {
+    const params = findEndpoint(path, method)!.parameters as Param[];
+    return params.find((p) => p.in === "body")!.schema!;
+  }
+
+  // The bundled spec is the docs spec byte for byte (scripts/sync-openapi.mjs,
+  // pinned by openapi.json.sha256). The api annotations give these rules as
+  // descriptions only: the generated schema has no required list, no minimum
+  // or maximum and no enums, and callback_url has no description. mcp #4 had
+  // added those keywords to this file by hand; the sync replaces them, so the
+  // rules are pinned here as the text the spec does carry. Until the api
+  // annotations state them as schema keywords, nothing in the spec says that
+  // callback_url is required (the start tools still check it, init-args.ts).
+  it("POST /verify/v1/init says user_id is required, on the field and the endpoint", () => {
+    const userId = bodySchema("/verify/v1/init", "post").properties["user_id"]!;
+    expect(String(userId["description"])).toMatch(/^required: /);
+    expect(findEndpoint("/verify/v1/init", "post")!.description).toContain("user_id is required");
+  });
+
+  it("POST /verify/v1/init states the min_age range and the band rule", () => {
+    const minAge = bodySchema("/verify/v1/init", "post").properties["min_age"]!;
+    expect(minAge["type"]).toBe("integer");
+    expect(String(minAge["description"])).toContain("12 to 25");
+    expect(String(minAge["description"])).toContain("19 is enforced as 21");
+    expect(String(minAge["description"])).toContain("id_verification takes none (omit it or send 0)");
+  });
+
+  it("POST /verify/v1/init names the purposes and modes, and the facial rule", () => {
+    const props = bodySchema("/verify/v1/init", "post").properties;
+    const purpose = String(props["purpose"]!["description"]);
+    for (const value of ["age_verification", "id_verification"]) expect(purpose).toContain(`"${value}"`);
+    const mode = String(props["verification_mode"]!["description"]);
+    for (const value of ["auto", "document", "facial"]) expect(mode).toContain(`"${value}"`);
+    expect(mode).toContain("refused with purpose id_verification");
+  });
+
+  it("POST /verify/v1/init says it needs a server key", () => {
+    const ep = findEndpoint("/verify/v1/init", "post")!;
+    expect(ep.description).toContain("SECRET_KEY_REQUIRED");
+    expect(ep.description).toContain("user_id is required");
+    expect(Object.keys(ep.responses)).toContain("403");
+  });
+
+  it.each([["/verify/v1/requirements/check"], ["/verify/v1/requirements"]])(
+    "GET %s takes the init token in X-Init-Token and no settings in the URL", (path) => {
+      const params = findEndpoint(path, "get")!.parameters as Param[];
+      expect(params.find((p) => p.name === "X-Init-Token")).toMatchObject({ in: "header", required: true });
+      expect(params.filter((p) => p.in === "query")).toEqual([]);
+    });
+
+  it("GET /verify/v1/requirements/check names the new refusals", () => {
+    const ep = findEndpoint("/verify/v1/requirements/check", "get")!;
+    expect(ep.description).toContain("MISSING_INIT_TOKEN");
+    expect(ep.description).toContain("INIT_TOKEN_KEY_MISMATCH");
+  });
+
+  it("leaves no reference the bundled resolver cannot follow on these paths", () => {
+    for (const [path, method] of [
+      ["/verify/v1/init", "post"], ["/verify/v1/init/{token}", "get"],
+      ["/verify/v1/requirements/check", "get"], ["/verify/v1/requirements", "get"],
+    ] as const) {
+      expect(JSON.stringify(findEndpoint(path, method)), path).not.toContain("$unresolved");
+    }
+  });
+});
